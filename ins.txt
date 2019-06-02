@@ -41,8 +41,6 @@ setisub 3 iarray+index+value
 setfsub 2 farray+index+value
 setssub 2 string+index+value
 
-
-
 控制类：
 make_block 标识代码块的开始
 end_block 结束代码块
@@ -61,4 +59,8 @@ get_sym 2 句柄+名字
 close_dll 1 dll句柄
 call_api 2 api函数+动态数组List
 
-
+虚拟机类：
+pop 干掉顶部量
+push_local 1 index
+push_global 1 index
+exit 退出虚拟机
