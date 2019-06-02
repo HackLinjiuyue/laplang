@@ -6,6 +6,8 @@ func type name(name_list)<type_list>{}
 
 type name=xxxx;
 
+必须初始化 vars must be initialized
+
 # 计数循环 count_loop
 
 for(start,end,step){}
