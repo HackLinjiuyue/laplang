@@ -6,16 +6,16 @@ func type name(name_list)<type_list>{}
 
 type name=xxxx;
 
-#计数循环 count_loop
+# 计数循环 count_loop
 
 for(start,end,step){}
 
-#条件循环 conditional_loop
+# 条件循环 conditional_loop
 
 while(cond){}
 
-#类定义 class define
+# 类定义 class define
 
 class name{} 不分公私有 without public/private
 
-以换行作为结束符
+以换行作为结束符 use `\n` to separate lines
