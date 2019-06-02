@@ -1,0 +1,64 @@
+运算类：
+iadd 2
+isub 2
+imul 2
+idiv 2
+imod 2
+igreater 2
+iequal 2
+iless 2
+fadd 2
+fsub 2
+fmul 2
+fdiv 2
+fmod 2
+fgreater 2
+fless 2
+fequal 2
+not 1
+or 2
+and 2
+getisub 2 iarray+number
+getfsub 2 farray+number
+getstr 2 string+number
+
+
+IO类：
+iprint 1
+fprint 1
+sprint 1
+strin  1
+文件：
+load_file 2 name+pattern
+read 1 fp
+write 2 fp+str
+close_file 1 fp
+
+变量类：
+setlocal 2 index+value
+setglobal 2 index+value
+setisub 3 iarray+index+value
+setfsub 2 farray+index+value
+setssub 2 string+index+value
+
+
+
+控制类：
+make_block 标识代码块的开始
+end_block 结束代码块
+for_loop 4 block+init+final+step
+loop 1 block while通过条件break实现
+break
+continue
+return
+if_do 2 block+condition
+make_function block+argc 作为变量储存
+call index argv*
+
+API类：
+load_dll 1 文件名
+get_sym 2 句柄+名字
+close_dll 1 dll句柄
+call_api 2 api函数+动态数组List
+
+
