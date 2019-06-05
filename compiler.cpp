@@ -28,18 +28,29 @@ public:
 	string Type,Value;
 	int line,byte;
 	vector<Token> sub;
-	Token(string type,string value,int Line,int b){
+	Token(string type,string value,int Line,int b,vector<Token> Sub=vector<Token>()){
 		Type=type;
 		Value=value;
 		line=Line;
 		byte=b;
+		sub=Sub;
 	}
 	Token(){
 		Type="";
 		Value="";
 	}
 	string Tostring(){
-		return Type+" "+Value;
+		string temp=Type+" "+Value;
+		Token token;
+		if(sub.size()>0){
+			temp+="：[{]";
+			for(int i=0;i<sub.size();i++){
+				token=sub[i];
+				temp+=token.Tostring()+",";
+			}
+			temp+="[}]";
+		}
+		return temp;
 	}
 };
 
@@ -127,11 +138,16 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			}
 			last_type="op";
 			linshi=onstr+onget[0];
-			if(Is_in_s(Symbols,&linshi,25)){
+			if(Is_in_s(Symbols,&linshi,25)&&linshi.length()>1){
 				token_list->push_back(Token("op",linshi,line,byte));
 			}
 			else{
-				token_list->push_back(Token("op",onget,line,byte));
+				if(onget[0]=='('&&token_list->back().Type=="var"){
+					token_list->push_back(Token("call",onget,line,byte));
+				}
+				else{
+					token_list->push_back(Token("op",onget,line,byte));
+				}
 			}
 		}
 		else if(Is_in_s(Num,&onget,10)){
@@ -315,13 +331,53 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 		if(onstr=="keyword"){
 			Check_format(token_list,i);
 		}
-		else{
-
-		}
 		if(error_list.size()>0){
 			break;
 		}
 	}
+}
+
+vector<Token> Fold(vector<Token> &token_list){
+	vector<Token> temp,*box=NULL;
+	Token token;
+	string name;
+	int kh,line,byte;
+	for(int i=0;i<token_list.size();i++){
+		token=token_list[i];
+		if(token.Type=="call"){
+			kh=1;
+			box=new vector<Token>();
+			token=temp.back();
+			temp.pop_back();
+			name=token.Value;
+			line=token.line;
+			byte=token.byte;
+			i++;
+			for(;i<token_list.size();i++){
+				token=token_list[i];
+				if(token.Value==")"){
+					kh--;
+				}
+				else if(token.Value=="("){
+					kh++;
+				}
+				if(kh==0){
+					break;
+				}
+				box->push_back(token);
+			}
+			if(kh>0){
+				error_list.push_back("错误："+Position(token.line,token.byte)+" 函数调用缺少')'");
+				break;
+			}
+			temp.push_back(Token("callbox",name,line,byte,*box));
+			delete box;
+		}
+		else{
+			temp.push_back(token);
+		}
+	}
+	return temp;
 }
 
 void Compile_file(string File_name){
@@ -334,9 +390,16 @@ void Compile_file(string File_name){
 	vector<string> temp;
 	Parse_Token(fp,&token_list);
 	if(error_list.size()==0){
-		Grammar_check(token_list,&temp);
+		token_list=Fold(token_list);
 	}
+	/*
+	if(error_list.size()==0){
+		Grammar_check(token_list,&temp);
+	}*/
 	fclose(fp);
+	for(int i=0;i<token_list.size();i++){
+		cout<<token_list[i].Tostring()<<"\n";
+	}
 }
 
 //
