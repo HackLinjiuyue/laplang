@@ -1,7 +1,9 @@
 #include<iostream>
 #include<vector>
 #include<map>
+#include<algorithm>
 #include<sstream>
+#include<stack>
 
 using namespace std;
 
@@ -43,12 +45,12 @@ public:
 		string temp=Type+" "+Value;
 		Token token;
 		if(sub.size()>0){
-			temp+="：[{]";
+			temp+="：[{]\n";
 			for(int i=0;i<sub.size();i++){
 				token=sub[i];
-				temp+=token.Tostring()+",";
+				temp+=token.Tostring()+"\n";
 			}
-			temp+="[}]";
+			temp+="[}]\n";
 		}
 		return temp;
 	}
@@ -118,12 +120,13 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			last_type="type";
 		}
 		if(onget[0]=='\n'){
-			line++;
-			byte=0;
 			if(onstr.length()>0){
 				token_list->push_back(Token(last_type,onstr,line,byte));
 				onstr="";
 			}
+			token_list->push_back(Token("break","\n",line,byte));
+			line++;
+			byte=0;
 		}
 		else if(onget[0]==' '){
 			if(onstr.length()>0){
@@ -165,7 +168,12 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				token_list->push_back(Token("num",onstr,line,byte));
 				onstr="";
 				if(onget[0]!=EOF){
-					token_list->push_back(Token("op",onget,line,byte));
+					if(onget[0]=='\n'){
+						token_list->push_back(Token("break","\n",line,byte));
+					}
+					else{
+						token_list->push_back(Token("op",onget,line,byte));
+					}
 				}
 			}
 			else{
@@ -201,6 +209,85 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			break;
 		}
 	}
+}
+
+int op_Level(const string op)
+{
+	const string l1[] = { "+" , "-" };
+	const string l2[] = { "*","/","<<",">>","!","%" };
+	const string l3[] = { "^" };
+	const string l4[] = { "||","&&" };
+	const string l5[] = { "==",">","<",">=","<=","!=" };
+
+	if(Is_in_s(l1,&op,2))
+		return 1;
+	if (Is_in_s(l2, &op, 6))
+		return 2;
+	if (Is_in_s(l3, &op, 1))
+		return 3;
+	if (Is_in_s(l4, &op, 2))
+		return 4;
+	if (Is_in_s(l5, &op, 6))
+		return 5;
+    return -1;
+
+}
+
+vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛
+{
+	stack<Token> s;
+	vector<Token> out;
+	FILE *fp=fopen(".\\log.txt","w+");
+	int cur = 0,size = token_list.size();
+	while (cur < size)
+	{
+        if (token_list[cur].Value == "(")
+        {
+            s.push(token_list[cur]);
+        }
+
+        else if (token_list[cur].Value == ")") //弹出内容直到遇到第一个左括号
+        {
+            while (s.top().Value != "(" && !
+                   s.empty())
+            {
+                out.push_back(s.top());
+                s.pop();
+            }
+            s.pop();//弹出左括号
+        }
+        else if(token_list[cur].Type == "op")
+        {
+        	if(!s.empty()){
+	            if (op_Level(s.top().Value) >= op_Level(token_list[cur].Value))
+	            {
+	                while (op_Level(s.top().Value) >= op_Level(token_list[cur].Value) && !s.empty())
+	                {
+	                    out.push_back(s.top());
+	                    s.pop();
+	                }
+	                s.push(token_list[cur]);
+	            }
+	            else{
+	            	s.push(token_list[cur]);
+	            }
+        	}
+            else
+            {
+                s.push(token_list[cur]);
+            }
+        }
+        else{
+        	out.push_back(token_list[cur]);
+        }
+        cur++;
+	}
+	while (!s.empty())
+	{
+		out.push_back(s.top());
+		s.pop();
+	}
+	return out;
 }
 
 void Gnerate_exp(vector<Token> *on_list,vector<string> *temp){
@@ -324,21 +411,39 @@ int Check_format(vector<Token> &token_list,int index){//无错返回目标index,
 void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 	string onstr;
 	Token token;
-	vector<Token> on_list;
+	vector<Token> *on_list=NULL;
 	for(int i=0;i<token_list.size();i++){
 		token=token_list[i];
 		onstr=token.Type;
 		if(onstr=="keyword"){
 			Check_format(token_list,i);
 		}
+		else{
+			on_list=new vector<Token>();
+			for(;i<token_list.size();i++){
+				token=token_list[i];
+				if(token.Value=="\n"){
+					break;
+				}
+				else{
+					on_list->push_back(token);
+				}
+			}
+			on_list=new vector<Token>(Trans_exp(*on_list));
+			for(int ii=0;ii<on_list->size();ii++){
+			cout<<(*on_list)[ii].Tostring()<<"\n";
+			}
+
+		}
 		if(error_list.size()>0){
 			break;
 		}
 	}
+	delete on_list;
 }
 
 vector<Token> Fold(vector<Token> &token_list){
-	vector<Token> temp,*box=NULL;
+	vector<Token> temp,*arg_list=NULL,*arg=NULL;
 	Token token;
 	string name;
 	int kh,line,byte;
@@ -346,35 +451,52 @@ vector<Token> Fold(vector<Token> &token_list){
 		token=token_list[i];
 		if(token.Type=="call"){
 			kh=1;
-			box=new vector<Token>();
+			arg=new vector<Token>();
+			arg_list=new vector<Token>();
 			token=temp.back();
 			temp.pop_back();
 			name=token.Value;
 			line=token.line;
 			byte=token.byte;
 			i++;
-			for(;i<token_list.size();i++){
-				token=token_list[i];
-				if(token.Value==")"){
-					kh--;
+			if(token_list[i].Value!=")"){
+				for(;i<token_list.size();i++){
+					token=token_list[i];
+					if(token.Value=="("){
+						kh++;
+					}
+					else if(token.Value==")"){
+						kh--;
+					}
+					if(kh==0){
+						if(arg->size()>0){
+							arg_list->push_back(Token("arg",name,line,byte,Fold(*arg)));
+						}
+						break;
+					}
+					else if(token.Value==","&&kh==1){
+						arg_list->push_back(Token("arg",name,line,byte,Fold(*arg)));
+						delete arg;
+						arg=new vector<Token>();
+					}
+					else{
+						arg->push_back(token);
+					}
 				}
-				else if(token.Value=="("){
-					kh++;
-				}
-				if(kh==0){
-					break;
-				}
-				box->push_back(token);
 			}
 			if(kh>0){
 				error_list.push_back("错误："+Position(token.line,token.byte)+" 函数调用缺少')'");
 				break;
 			}
-			temp.push_back(Token("callbox",name,line,byte,*box));
-			delete box;
+			temp.push_back(Token("callbox",name,line,byte,*arg_list));
+			delete arg_list;
+			delete arg;
 		}
 		else{
 			temp.push_back(token);
+		}
+		if(error_list.size()>0){
+			break;
 		}
 	}
 	return temp;
@@ -392,14 +514,10 @@ void Compile_file(string File_name){
 	if(error_list.size()==0){
 		token_list=Fold(token_list);
 	}
-	/*
 	if(error_list.size()==0){
 		Grammar_check(token_list,&temp);
-	}*/
-	fclose(fp);
-	for(int i=0;i<token_list.size();i++){
-		cout<<token_list[i].Tostring()<<"\n";
 	}
+	fclose(fp);
 }
 
 //
