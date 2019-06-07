@@ -30,12 +30,14 @@ public:
 	string Type,Value;
 	int line,byte;
 	vector<Token> sub;
-	Token(string type,string value,int Line,int b,vector<Token> Sub=vector<Token>()){
+	bool is_float;
+	Token(string type,string value,int Line,int b,vector<Token> Sub=vector<Token>(),bool is=false){
 		Type=type;
 		Value=value;
 		line=Line;
 		byte=b;
 		sub=Sub;
+		is_float=is;
 	}
 	Token(){
 		Type="";
@@ -101,6 +103,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 	string onstr(""),onget(" "),linshi,last_type;
 	char last_get;
 	int line=1,byte=0;
+	bool is_float=false,is_func=false;
 	while(onget[0]!=EOF){
 		onget[0]=fgetc(fp);
 		byte++;
@@ -115,6 +118,9 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 		}
 		if(Is_in_s(KeyWords,&onstr,5)){
 			last_type="keyword";
+			if(onstr=="func"){
+				is_func=true;
+			}
 		}
 		else if(Is_in_s(Basic_type,&onstr,5)){
 			last_type="type";
@@ -145,11 +151,12 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				token_list->push_back(Token("op",linshi,line,byte));
 			}
 			else{
-				if(onget[0]=='('&&token_list->back().Type=="var"){
+				if(onget[0]=='('&&token_list->back().Type=="var"&&!is_func){
 					token_list->push_back(Token("call",onget,line,byte));
 				}
 				else{
 					token_list->push_back(Token("op",onget,line,byte));
+					is_func=false;
 				}
 			}
 		}
@@ -163,9 +170,18 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				onget[0]=fgetc(fp);
 				while(Is_in_s(Num,&onget,10)||onget[0]=='.'){
 					onstr+=onget[0];
+					if(onget[0]=='.'){
+						if(!is_float){
+							is_float=true;
+						}
+						else{
+							error_list.push_back("错误："+Position(line,byte)+" 数字格式错误");
+						}
+					}
 					onget[0]=fgetc(fp);
 				}
-				token_list->push_back(Token("num",onstr,line,byte));
+				token_list->push_back(Token("num",onstr,line,byte,vector<Token>(),is_float));
+				is_float=false;
 				onstr="";
 				if(onget[0]!=EOF){
 					if(onget[0]=='\n'){
@@ -290,10 +306,6 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛
 	return out;
 }
 
-void Gnerate_exp(vector<Token> *on_list,vector<string> *temp){
-
-}
-
 int Check_format(vector<Token> &token_list,int index){//无错返回目标index,否则返回-1
 	Token token=token_list[index];
 	bool is_comma=false,is_right=false;
@@ -331,7 +343,10 @@ int Check_format(vector<Token> &token_list,int index){//无错返回目标index,
 			}
 			else if(is_comma){
 				is_comma=false;
-				if(token.Type!="var"){
+				if(token.Type=="var"){
+					var_len++;
+				}
+				else{
 					error_list.push_back("错误："+Position(token.line,token.byte)+" 函数定义缺少变量名");
 					break;
 				}
@@ -339,12 +354,12 @@ int Check_format(vector<Token> &token_list,int index){//无错返回目标index,
 			else if(token.Value==","){
 				is_comma=true;
 			}
-			else if(token.Type!="var"){
-				error_list.push_back("错误："+Position(token.line,token.byte)+" 非变量不能出现在参数名集中");
-				break;
+			else if(token.Type=="var"){
+				var_len++;
 			}
 			else{
-				var_len++;
+				error_list.push_back("错误："+Position(token.line,token.byte)+" 非变量不能出现在参数名集中");
+				break;
 			}
 		}
 		if(error_list.size()>0){
@@ -355,10 +370,6 @@ int Check_format(vector<Token> &token_list,int index){//无错返回目标index,
 			return -1;
 		}
 		index++;
-		if(index==token_list.size()){
-			error_list.push_back("错误："+Position(token.line,token.byte)+" 函数定义的参数类型集缺少'<'");
-			return -1;
-		}
 		token=token_list[index];
 		if(token.Value!="<"){
 			error_list.push_back("错误："+Position(token.line,token.byte)+" 该位置要求的符号为'<'，不是'"+token.Value+"'");
@@ -375,7 +386,14 @@ int Check_format(vector<Token> &token_list,int index){//无错返回目标index,
 			}
 			else if(is_comma){
 				is_comma=false;
-				if(token.Type!="type"){
+				if(token.Type=="type"){
+					type_len++;
+					if(!Is_in_s(Basic_type,&token.Value,5)){
+						error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'不是一个有效的类型");
+						break;
+					}
+				}
+				else{
 					error_list.push_back("错误："+Position(token.line,token.byte)+" 函数定义的参数类型集缺少类型");
 					break;
 				}
@@ -383,15 +401,15 @@ int Check_format(vector<Token> &token_list,int index){//无错返回目标index,
 			else if(token.Value==","){
 				is_comma=true;
 			}
-			else if(token.Type!="type"){
-				error_list.push_back("错误："+Position(token.line,token.byte)+" 非类型不能出现在参数类型集中");
-				break;
-			}
-			else{
+			else if(token.Type=="type"){
 				type_len++;
 				if(!Is_in_s(Basic_type,&token.Value,5)){
 					error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'不是一个有效的类型");
 				}
+			}
+			else{
+				error_list.push_back("错误："+Position(token.line,token.byte)+" 非类型不能出现在参数类型集中");
+				break;
 			}
 		}
 		if(error_list.size()>0){
@@ -405,7 +423,17 @@ int Check_format(vector<Token> &token_list,int index){//无错返回目标index,
 			error_list.push_back("错误："+Position(token.line,token.byte)+" 函数定义的参数个数与参数类型的个数不符 "+Position(var_len,type_len));
 			return -1;
 		}
+		index++;
+		if(token_list[index].Type!="codebox"){
+			error_list.push_back("错误："+Position(token.line,token.byte)+" 函数定义规定需要代码块");
+			return -1;
+		}
+		index--;
 	}
+	else if(token.Value=="while"){
+		index++;
+	}
+	return index;
 }
 
 void Grammar_check(vector<Token> &token_list,vector<string> *temp){
@@ -416,7 +444,10 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 		token=token_list[i];
 		onstr=token.Type;
 		if(onstr=="keyword"){
-			Check_format(token_list,i);
+			i=Check_format(token_list,i);
+		}
+		else if(onstr=="codebox"){
+			Grammar_check(token.sub,temp);
 		}
 		else{
 			on_list=new vector<Token>();
@@ -430,10 +461,6 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 				}
 			}
 			on_list=new vector<Token>(Trans_exp(*on_list));
-			for(int ii=0;ii<on_list->size();ii++){
-			cout<<(*on_list)[ii].Tostring()<<"\n";
-			}
-
 		}
 		if(error_list.size()>0){
 			break;
@@ -459,38 +486,88 @@ vector<Token> Fold(vector<Token> &token_list){
 			line=token.line;
 			byte=token.byte;
 			i++;
-			if(token_list[i].Value!=")"){
-				for(;i<token_list.size();i++){
-					token=token_list[i];
-					if(token.Value=="("){
-						kh++;
-					}
-					else if(token.Value==")"){
-						kh--;
-					}
-					if(kh==0){
-						if(arg->size()>0){
-							arg_list->push_back(Token("arg",name,line,byte,Fold(*arg)));
-						}
-						break;
-					}
-					else if(token.Value==","&&kh==1){
+			for(;i<token_list.size();i++){
+				token=token_list[i];
+				if(token.Value=="("){
+					kh++;
+				}
+				else if(token.Value==")"){
+					kh--;
+				}
+				if(kh==0){
+					if(arg->size()>0){
 						arg_list->push_back(Token("arg",name,line,byte,Fold(*arg)));
-						delete arg;
-						arg=new vector<Token>();
 					}
-					else{
-						arg->push_back(token);
-					}
+					break;
+				}
+				else if(token.Value==","&&kh==1){
+					arg_list->push_back(Token("arg",name,line,byte,Fold(*arg)));
+					delete arg;
+					arg=new vector<Token>();
+				}
+				else{
+					arg->push_back(token);
 				}
 			}
 			if(kh>0){
-				error_list.push_back("错误："+Position(token.line,token.byte)+" 函数调用缺少')'");
+				error_list.push_back("错误："+Position(line,byte)+" 函数调用缺少')'");
 				break;
 			}
 			temp.push_back(Token("callbox",name,line,byte,*arg_list));
 			delete arg_list;
 			delete arg;
+		}
+		else if(token.Value=="("){
+			temp.push_back(token);
+			i++;
+			line=token.line;
+			byte=token.byte;
+			kh=1;
+			for(;i<token_list.size();i++){
+				token=token_list[i];
+				temp.push_back(token);
+				if(token.Value=="("){
+					kh++;
+				}
+				else if(token.Value==")"){
+					kh--;
+				}
+				if(kh==0){
+					break;
+				}
+			}
+			if(kh>0){
+				error_list.push_back("错误："+Position(line,byte)+" 表达式缺少')'");
+				break;
+			}
+		}
+		else if(token.Value=="{"){
+			arg=new vector<Token>();
+			kh=1;
+			i++;
+			line=token.line;
+			byte=token.byte;
+			for(;i<token_list.size();i++){
+				token=token_list[i];
+				if(token.Value=="}"){
+					kh--;
+				}
+				else if(token.Value=="{"){
+					kh++;
+				}
+				if(kh==0){
+					break;
+				}
+				arg->push_back(token);
+			}
+			if(kh>0){
+				error_list.push_back("错误："+Position(line,byte)+" 代码块缺少'}'");
+				break;
+			}
+
+			temp.push_back(Token("codebox","",line,byte,Fold(*arg)));
+			delete arg;
+			delete arg_list;
 		}
 		else{
 			temp.push_back(token);
@@ -514,6 +591,8 @@ void Compile_file(string File_name){
 	if(error_list.size()==0){
 		token_list=Fold(token_list);
 	}
+	Token token=token_list.back();
+	token_list.push_back(Token("break","\n",token.line+1,0));
 	if(error_list.size()==0){
 		Grammar_check(token_list,&temp);
 	}
