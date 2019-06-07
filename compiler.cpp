@@ -23,7 +23,7 @@ vector<string> Class_type,error_list;
 
 stringstream stream;
 
-map<string,string> global,local;
+map<string,string> global;
 
 class Token{
 public:
@@ -116,7 +116,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 		else if(onget[0]=='\t'){
 			continue;
 		}
-		if(Is_in_s(KeyWords,&onstr,5)){
+		if(Is_in_s(KeyWords,&onstr,8)){
 			last_type="keyword";
 			if(onstr=="func"){
 				is_func=true;
@@ -308,7 +308,7 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛
 
 int Check_format(vector<Token> &token_list,int index){//无错返回目标index,否则返回-1
 	Token token=token_list[index];
-	bool is_comma=false,is_right=false;
+	bool is_comma=false,is_right=false,is_block=false;
 	int len,var_len=0,type_len=0;
 	if(token.Value=="func"){
 		len=token_list.size()-index-1;
@@ -432,6 +432,17 @@ int Check_format(vector<Token> &token_list,int index){//无错返回目标index,
 	}
 	else if(token.Value=="while"){
 		index++;
+		for(;index<token_list.size();index++){
+			if(token_list[index].Type=="codebox"){
+				is_block=true;
+				break;
+			}
+		}
+		if(!is_block){
+			error_list.push_back("错误："+Position(token.line,token.byte)+" 循环体规定需要代码块");
+			return -1;
+		}
+		index--;
 	}
 	return index;
 }
@@ -445,6 +456,12 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 		onstr=token.Type;
 		if(onstr=="keyword"){
 			i=Check_format(token_list,i);
+			if(i==-1){
+				break;
+			}
+		}
+		else if(onstr=="type"){
+
 		}
 		else if(onstr=="codebox"){
 			Grammar_check(token.sub,temp);
@@ -456,11 +473,14 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 				if(token.Value=="\n"){
 					break;
 				}
+				else if(token.Type=="keyword"){
+					i--;
+					break;
+				}
 				else{
 					on_list->push_back(token);
 				}
 			}
-			on_list=new vector<Token>(Trans_exp(*on_list));
 		}
 		if(error_list.size()>0){
 			break;
