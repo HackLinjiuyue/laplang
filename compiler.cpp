@@ -17,7 +17,11 @@ const string Basic_type[6]={"int","float","double","bool","string","void"};
 
 const string Num[10]={"0","1","2","3","4","5","6","7","8","9"};
 
+const string Bool[2]={"true","false"};
+
 const string Func_lack_msg[3]={"类型","函数名","'('"};
+
+const string Five_basic[5]={"+","-","*","/","%"};
 
 const string l1[] = { "+" , "-" };
 const string l2[] = { "*","/","<<",">>","!","%" };
@@ -31,13 +35,17 @@ class Class{
 	map<string,string> member;
 };
 
-vector<string> error_list;
+vector<string> error_list,conv_bool,conv_int,conv_float;
 
 map<string,Class> Class_type;
+
+map<string,vector<string> > convert;
 
 stringstream stream;
 
 string last_func_name,last_func_type;
+
+bool last_func=false;
 
 class Token{
 public:
@@ -58,7 +66,7 @@ public:
 		Value="";
 	}
 	string Tostring(){
-		string temp=Type+" "+Value;
+		string temp=Type+" "+Value+"\n";
 		Token token;
 		if(sub.size()>0){
 			temp+="：[{]\n";
@@ -94,6 +102,8 @@ public:
 		init=i;
 	}
 };
+
+vector<var> *last_arg=NULL;
 
 map<string,data> global;
 
@@ -134,6 +144,14 @@ string Tostring(float value){
 	return temp;
 }
 
+string Tostring(size_t value){
+	string temp;
+	stream<<value;
+	stream>>temp;
+	stream.clear();
+	return temp;
+}
+
 string Position(int line,int byte){
 	return Tostring(line)+"."+Tostring(byte);
 }
@@ -160,6 +178,9 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			if(onstr=="func"){
 				is_func=true;
 			}
+		}
+		else if(Is_in_s(Bool,&onstr,2)){
+			last_type="bool";
 		}
 		else if(Is_in_s(Basic_type,&onstr,6)){
 			last_type="type";
@@ -219,12 +240,18 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 					}
 					onget[0]=fgetc(fp);
 				}
-				token_list->push_back(Token("num",onstr,line,byte,vector<Token>(),is_float));
+				if(is_float){
+					token_list->push_back(Token("float",onstr,line,byte,vector<Token>(),is_float));
+				}
+				else{
+					token_list->push_back(Token("int",onstr,line,byte,vector<Token>(),is_float));
+				}
 				is_float=false;
 				onstr="";
 				if(onget[0]!=EOF){
 					if(onget[0]=='\n'){
 						token_list->push_back(Token("break","\n",line,byte));
+						line++;
 					}
 					else{
 						token_list->push_back(Token("op",onget,line,byte));
@@ -253,7 +280,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				last_get=onget[0];
 				onget[0]=fgetc(fp);
 			}
-			token_list->push_back(Token("str",onstr,line,byte));
+			token_list->push_back(Token("string",onstr,line,byte));
 			onstr="";
 		}
 		else{
@@ -286,11 +313,99 @@ int op_Level(const string op)
 
 }
 
+bool Check_convert(string on_type,string to_type){
+	map<string,vector<string> >::iterator iter=convert.find(to_type);
+	bool temp=false;
+	for(int i=0;i<iter->second.size();i++){
+		if(iter->second[i]==on_type){
+			temp=true;
+			break;
+		}
+	}
+	return temp;
+}
+
+void Check_exp(vector<Token> &token_list,map<string,data> *domain){
+	vector<Token> stack;
+	Token token,op1,op2;
+	string op,type1,type2;
+	map<string,data>::iterator iter;
+	for(int i=0;i<token_list.size();i++){
+		token=token_list[i];
+		op=token.Value;
+		if(token.Type=="op"){
+			if(stack.empty()){
+				error_list.push_back("错误："+Position(token.line,token.byte)+" 错误的运算符位置");
+				break;
+			}
+			op2=stack.back();
+			stack.pop_back();
+			if(op2.Type=="var"){
+				iter=domain->find(op2.Value);
+				if(iter==domain->end()){
+					iter=global.find(op2.Value);
+					if(iter==global.end()){
+						error_list.push_back("错误："+Position(op2.line,op2.byte)+" 变量'"+op2.Value+"'未定义");
+						break;
+					}
+				}
+				if(iter->second.argc!=-1){
+					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 函数指针'"+op2.Value+"'不能参与运算");
+					break;
+				}
+				type2=iter->second.type;
+			}
+			else{
+				type2=op2.Type;
+			}
+			if(op=="!"){
+				if(op2.Type!="bool"&&!Check_convert(op2.Type,"bool")){
+					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 类型'"+op2.Type+"'无法转换为'bool'类型进行非运算");
+					break;
+				}
+			}
+			else{
+				if(stack.size()==0){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 运算符'"+op+"'缺少第二个操作值");
+					break;
+				}
+				op1=stack.back();
+				stack.pop_back();
+				if(op1.Type=="var"){
+					iter=domain->find(op1.Value);
+					if(iter==domain->end()){
+						iter=global.find(op1.Value);
+						if(iter==global.end()){
+							error_list.push_back("错误："+Position(op1.line,op1.byte)+" 变量'"+op1.Value+"'未定义");
+							break;
+						}
+					}
+					if(iter->second.argc!=-1){
+						error_list.push_back("错误："+Position(op1.line,op1.byte)+" 函数'"+op1.Value+"'不能参与运算");
+						break;
+					}
+					type1=iter->second.type;
+				}
+				else{
+					type1=op1.Type;
+				}
+				if(type1!=type2&&!Check_convert(type2,type1)){
+					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 类型'"+type2+"'无法转换为'"+type1+"'类型进行'"+op+"'运算");
+					break;
+				}
+			}
+			stack.push_back(Token(type1,"",op2.line,op2.byte,vector<Token>(),false));
+		}
+		else{
+			stack.push_back(token);
+		}
+	}
+}
+
 vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛
 {
 	stack<Token> s;
 	vector<Token> out;
-	FILE *fp=fopen(".\\log.txt","w+");
 	int cur = 0,size = token_list.size();
 	while (cur < size)
 	{
@@ -476,6 +591,8 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 			args.push_back(var(type[i],name[i]));
 		}
 		domain->insert(pair<string,data>(last_func_name,data(last_func_type,args.size(),args)));
+		last_func=true;
+		last_arg=new vector<var>(args);
 	}
 	else if(token.Value=="while"){
 		index++;
@@ -495,17 +612,30 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 	return index;
 }
 
-void Grammar_check(vector<Token> &token_list,vector<string> *temp){
+void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,data> *domain){
 	string onstr;
 	Token token;
 	vector<Token> *on=NULL,s;
-	map<string,data> local;
-	bool is_break;
+	map<string,data> *local=NULL;
+	var x=var("","");
+	bool is_break,last_f=last_func;
+	if(last_func){
+		last_func=false;
+		local=new map<string,data>();
+		for(int i=0;i<last_arg->size();i++){
+			x=(*last_arg)[i];
+			local->insert(pair<string,data>(x.name,data(x.type)));
+		}
+		delete last_arg;
+	}
+	else{
+		local=domain;
+	}
 	for(int i=0;i<token_list.size();i++){
 		token=token_list[i];
 		onstr=token.Type;
 		if(onstr=="keyword"){
-			i=Check_format(token_list,i,&local);
+			i=Check_format(token_list,i,local);
 			if(i==-1){
 				break;
 			}
@@ -529,7 +659,7 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 				}
 				else{
 					last_func_name=token.Value;
-					if(global.find(last_func_name)!=global.end()||local.find(last_func_name)!=local.end()){
+					if(global.find(last_func_name)!=global.end()||local->find(last_func_name)!=local->end()){
 						error_list.push_back("错误："+Position(token.line,token.byte)+" '"+last_func_name+"'被重复定义");
 						break;
 					}
@@ -546,13 +676,13 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 						}
 						on->push_back(token);
 					}
-					local.insert(pair<string,data>(last_func_name,data(last_func_type,-1,vector<var>(),Trans_exp(*on))));
+					local->insert(pair<string,data>(last_func_name,data(last_func_type,-1,vector<var>(),Trans_exp(*on))));
 					delete on;
 				}
 			}
 		}
 		else if(onstr=="codebox"){
-			Grammar_check(token.sub,temp);
+			Grammar_check(token.sub,temp,local);
 		}
 		else{
 			on=new vector<Token>();
@@ -560,6 +690,10 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 				token=token_list[i];
 				if(token.Value==","||token.Value=="\n"||token.Type=="codebox"){
 					s.push_back(Token("exp","",token.line,token.byte,Trans_exp(*on)));
+					Check_exp(s.back().sub,local);
+					if(!error_list.empty()){
+						break;
+					}
 					if(token.Value=="\n"||token.Type=="codebox"){
 						if(token.Type=="codebox"){
 							i--;
@@ -578,6 +712,9 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp){
 		if(error_list.size()>0){
 			break;
 		}
+	}
+	if(local!=NULL&&last_f){
+		delete local;
 	}
 }
 
@@ -706,7 +843,7 @@ void Compile_file(string File_name){
 	Token token=token_list.back();
 	token_list.push_back(Token("break","\n",token.line+1,0));
 	if(error_list.size()==0){
-		Grammar_check(token_list,&temp);
+		Grammar_check(token_list,&temp,new map<string,data>());
 	}
 	fclose(fp);
 }
@@ -714,6 +851,16 @@ void Compile_file(string File_name){
 //
 
 int main(int argc,char* argv[]){
+	conv_bool.push_back("int");
+	conv_bool.push_back("float");
+	convert["bool"]=conv_bool;
+	conv_int.push_back("bool");
+	conv_int.push_back("float");
+	convert["int"]=conv_int;
+	conv_float.push_back("bool");
+	conv_float.push_back("int");
+	convert["float"]=conv_float;
+	convert["string"]=vector<string>();
 	for(int i=1;i<argc;i++){
 		Compile_file(argv[i]);
 		if(error_list.size()>0){
