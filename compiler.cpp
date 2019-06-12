@@ -23,6 +23,8 @@ const string Func_lack_msg[3]={"类型","函数名","'('"};
 
 const string Five_basic[5]={"+","-","*","/","%"};
 
+const string Be_check[2]={"func","while"};
+
 const string l1[] = { "+" , "-" };
 const string l2[] = { "*","/","<<",">>","!","%" };
 const string l3[] = { "^" };
@@ -108,6 +110,13 @@ vector<var> *last_arg=NULL;
 map<string,data> global;
 
 //
+//
+
+void debug_write(string msg){
+	FILE *fp=fopen(".\\log.txt","a+");
+	fputs((msg+"\n").c_str(),fp);
+	fclose(fp);
+}
 
 bool Is_in_s(const string *onstr,const string *onget,int count){
 	bool temp=false;
@@ -309,7 +318,7 @@ int op_Level(const string op)
 		return 0;
 	if (Is_in_s(l7, &op, 1))
 		return 6;
-    return -1;
+	return -1;
 
 }
 
@@ -326,6 +335,7 @@ bool Check_convert(string on_type,string to_type){
 }
 
 void Check_exp(vector<Token> &token_list,map<string,data> *domain){
+	
 	vector<Token> stack;
 	Token token,op1,op2;
 	string op,type1,type2;
@@ -409,46 +419,37 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛
 	int cur = 0,size = token_list.size();
 	while (cur < size)
 	{
-        if (token_list[cur].Value == "(")
-        {
-            s.push(token_list[cur]);
-        }
+		if (token_list[cur].Value == "(")
+		{
+			s.push(token_list[cur]);
+		}
 
-        else if (token_list[cur].Value == ")") //弹出内容直到遇到第一个左括号
-        {
-            while (s.top().Value != "(" && !
-                   s.empty())
-            {
-                out.push_back(s.top());
-                s.pop();
-            }
-            s.pop();//弹出左括号
-        }
-        else if(token_list[cur].Type == "op")
-        {
-        	if(!s.empty()){
-	            if (op_Level(s.top().Value) >= op_Level(token_list[cur].Value))
-	            {
-	                while (op_Level(s.top().Value) >= op_Level(token_list[cur].Value) && !s.empty())
-	                {
-	                    out.push_back(s.top());
-	                    s.pop();
-	                }
-	                s.push(token_list[cur]);
-	            }
-	            else{
-	            	s.push(token_list[cur]);
-	            }
-        	}
-            else
-            {
-                s.push(token_list[cur]);
-            }
-        }
-        else{
-        	out.push_back(token_list[cur]);
-        }
-        cur++;
+		else if (token_list[cur].Value == ")") //弹出内容直到遇到第一个左括号
+		{
+			while (s.top().Value != "(" && !
+				   s.empty())
+			{
+				out.push_back(s.top());
+				s.pop();
+			}
+			s.pop();//弹出左括号
+		}
+		else if(token_list[cur].Type == "op")
+		{
+			while (!s.empty())
+			{
+				if(op_Level(s.top().Value) < op_Level(token_list[cur].Value)){
+					break;
+				}
+				out.push_back(s.top());
+				s.pop();
+			}
+			s.push(token_list[cur]);
+		}
+		else{
+			out.push_back(token_list[cur]);
+		}
+		cur++;
 	}
 	while (!s.empty())
 	{
@@ -460,6 +461,7 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛
 
 int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){//无错返回目标index,否则返回-1
 	Token token=token_list[index];
+
 	bool is_block=false;
 	int count=0;
 	if(token.Value=="func"){
@@ -613,6 +615,7 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 }
 
 void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,data> *domain){
+	
 	string onstr;
 	Token token;
 	vector<Token> *on=NULL,s;
@@ -635,9 +638,8 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 		token=token_list[i];
 		onstr=token.Type;
 		if(onstr=="keyword"){
-			i=Check_format(token_list,i,local);
-			if(i==-1){
-				break;
+			if(Is_in_s(Be_check,&token.Value,2)){
+				i=Check_format(token_list,i,local);
 			}
 		}
 		else if(onstr=="type"){
@@ -691,13 +693,11 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 				if(token.Value==","||token.Value=="\n"||token.Type=="codebox"){
 					s.push_back(Token("exp","",token.line,token.byte,Trans_exp(*on)));
 					Check_exp(s.back().sub,local);
-					if(!error_list.empty()){
+					if(!error_list.empty()||token.Value=="\n"){
 						break;
 					}
-					if(token.Value=="\n"||token.Type=="codebox"){
-						if(token.Type=="codebox"){
-							i--;
-						}
+					if(token.Type=="codebox"){
+						i--;
 						break;
 					}
 					delete on;
@@ -861,6 +861,9 @@ int main(int argc,char* argv[]){
 	conv_float.push_back("int");
 	convert["float"]=conv_float;
 	convert["string"]=vector<string>();
+	FILE *fp=fopen(".\\log.txt","w");
+	fputs("",fp);
+	fclose(fp);
 	for(int i=1;i<argc;i++){
 		Compile_file(argv[i]);
 		if(error_list.size()>0){
