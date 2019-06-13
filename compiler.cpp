@@ -11,7 +11,7 @@ using namespace std;
 
 const string Symbols[25]={")","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","[","]","{","}","==",",","!"};
 
-const string KeyWords[8]={"func","return","if","break","continue","while","for","class"};
+const string KeyWords[10]={"func","return","if","break","continue","while","for","class","else","elseif"};
 
 const string Basic_type[6]={"int","float","double","bool","string","void"};
 
@@ -22,8 +22,6 @@ const string Bool[2]={"true","false"};
 const string Func_lack_msg[3]={"类型","函数名","'('"};
 
 const string Five_basic[5]={"+","-","*","/","%"};
-
-const string Be_check[2]={"func","while"};
 
 const string l1[] = { "+" , "-" };
 const string l2[] = { "*","/","<<",">>","!","%" };
@@ -182,7 +180,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 		else if(onget[0]=='\t'){
 			continue;
 		}
-		if(Is_in_s(KeyWords,&onstr,8)){
+		if(Is_in_s(KeyWords,&onstr,10)){
 			last_type="keyword";
 			if(onstr=="func"){
 				is_func=true;
@@ -335,19 +333,15 @@ bool Check_convert(string on_type,string to_type){
 }
 
 void Check_exp(vector<Token> &token_list,map<string,data> *domain){
-	
 	vector<Token> stack;
 	Token token,op1,op2;
 	string op,type1,type2;
 	map<string,data>::iterator iter;
+	int equal_count=0;
 	for(int i=0;i<token_list.size();i++){
 		token=token_list[i];
 		op=token.Value;
 		if(token.Type=="op"){
-			if(stack.empty()){
-				error_list.push_back("错误："+Position(token.line,token.byte)+" 错误的运算符位置");
-				break;
-			}
 			op2=stack.back();
 			stack.pop_back();
 			if(op2.Type=="var"){
@@ -410,9 +404,17 @@ void Check_exp(vector<Token> &token_list,map<string,data> *domain){
 			stack.push_back(token);
 		}
 	}
+	if(!error_list.empty()){
+		return;
+	}
+	token=stack.back();
+	if(stack.size()>1){
+		error_list.push_back("错误："+Position(token.line,token.byte)+" 变量无法在没有运算符的情况下并列出现");
+		return;
+	}
 }
 
-vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛
+vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛 优化和bug修复 魔凤啸天(hacklinjiuyue)
 {
 	stack<Token> s;
 	vector<Token> out;
@@ -596,7 +598,7 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 		last_func=true;
 		last_arg=new vector<var>(args);
 	}
-	else if(token.Value=="while"){
+	else if(token.Value=="while"||token.Value=="if"){
 		index++;
 		for(;index<token_list.size();index++){
 			if(token_list[index].Type=="codebox"){
@@ -606,7 +608,41 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 			count++;
 		}
 		if(!is_block){
-			error_list.push_back("错误："+Position(token.line,token.byte)+" 循环体规定需要代码块");
+			error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'规定需要代码块");
+			return -1;
+		}
+		index-=count+1;
+	}
+	else if(token.Value=="else"){
+		index--;
+
+		while(token_list[index].Type=="break"&&index>0){
+			index--;
+			count++;
+		}
+		if(token_list[index].Type!="codebox"){
+			error_list.push_back("错误："+Position(token.line,token.byte)+" 'else'规定需要有从属的if语句块");
+			return -1;
+		}
+		while(token_list[index].Type!="keyword"&&index>0){
+			index--;
+			count++;
+		}
+		if(token_list[index].Value!="if"){
+			error_list.push_back("错误："+Position(token.line,token.byte)+" 'else'规定需要有从属的if语句");
+			return -1;
+		}
+		index+=count+2;
+		count=0;
+		for(;index<token_list.size();index++){
+			if(token_list[index].Type=="codebox"){
+				is_block=true;
+				break;
+			}
+			count++;
+		}
+		if(!is_block){
+			error_list.push_back("错误："+Position(token.line,token.byte)+" 'else'规定需要代码块");
 			return -1;
 		}
 		index-=count+1;
@@ -615,13 +651,13 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 }
 
 void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,data> *domain){
-	
 	string onstr;
 	Token token;
 	vector<Token> *on=NULL,s;
 	map<string,data> *local=NULL;
 	var x=var("","");
-	bool is_break,last_f=last_func;
+	bool last_f=last_func,last_return=false;
+	int equal_count;
 	if(last_func){
 		last_func=false;
 		local=new map<string,data>();
@@ -638,76 +674,110 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 		token=token_list[i];
 		onstr=token.Type;
 		if(onstr=="keyword"){
-			if(Is_in_s(Be_check,&token.Value,2)){
-				i=Check_format(token_list,i,local);
-			}
+			last_return=true;
+			i=Check_format(token_list,i,local);
 		}
-		else if(onstr=="type"){
-			is_break=false;
-			if(!Is_in_s(Basic_type,&token.Value,6)&&Class_type.find(token.Value)==Class_type.end()){
-				error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'不是一个有效的类型");
-				break;
-			}
-			last_func_type=token.Value;
-			i++;
-			for(;i<token_list.size();i++){
-				token=token_list[i];
-				if(token.Value=="\n"){
+		else{
+			if(onstr=="type"){
+				if(!Is_in_s(Basic_type,&token.Value,6)&&Class_type.find(token.Value)==Class_type.end()){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'不是一个有效的类型");
 					break;
 				}
-				if(token.Type!="var"){
-					error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'不是一个有效的变量名");
-					break;
-				}
-				else{
-					last_func_name=token.Value;
-					if(global.find(last_func_name)!=global.end()||local->find(last_func_name)!=local->end()){
-						error_list.push_back("错误："+Position(token.line,token.byte)+" '"+last_func_name+"'被重复定义");
+				last_func_type=token.Value;
+				i++;
+				for(;i<token_list.size();i++){
+					token=token_list[i];
+					if(token.Type=="break"){
 						break;
 					}
-					i++;
-					on=new vector<Token>();
-					for(;i<token_list.size();i++){
-						token=token_list[i];
-						if(token.Value==","){
+					if(token.Type!="var"){
+						error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'不是一个有效的变量名");
+						break;
+					}
+					else{
+						last_func_name=token.Value;
+						if(global.find(last_func_name)!=global.end()||local->find(last_func_name)!=local->end()){
+							error_list.push_back("错误："+Position(token.line,token.byte)+" '"+last_func_name+"'被重复定义");
 							break;
 						}
-						else if(token.Value=="\n"){
+						i++;
+						on=new vector<Token>();
+						for(;i<token_list.size();i++){
+							token=token_list[i];
+							if(token.Value==","){
+								break;
+							}
+							else if(token.Type=="break"){
+								i--;
+								break;
+							}
+							on->push_back(token);
+						}
+						local->insert(pair<string,data>(last_func_name,data(last_func_type,-1,vector<var>(),Trans_exp(*on))));
+						delete on;
+					}
+				}
+			}
+			else if(onstr=="codebox"){
+				if(token_list[i-1].Type=="var"){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 错误的'{'位置");
+					break;
+				}
+				Grammar_check(token.sub,temp,local);
+			}
+			else{
+				on=new vector<Token>();
+				equal_count=0;
+				for(;i<token_list.size();i++){
+					token=token_list[i];
+					if(token.Value==","||token.Type=="break"||token.Type=="codebox"){
+						s.push_back(Token("exp","",token.line,token.byte,Trans_exp(*on)));
+						onstr=token.Type;
+						token=s.back();
+						if(token.sub.size()>1){
+							if(equal_count==0&&!last_return){
+								error_list.push_back("错误："+Position(token.line,token.byte)+" 表达式无法作为单独的语句存在");
+								break;
+							}
+							Check_exp(token.sub,local);
+							if(!error_list.empty()){
+								break;
+							}
+						}
+						else if(!token.sub.empty()){
+							if(token.sub[0].Type!="callbox"&&equal_count==0&&!last_return){
+								token=token.sub[0];
+								error_list.push_back("错误："+Position(token.line,token.byte)+" 表达式无法作为单独的语句存在");
+								break;
+							}
+						}
+						if(onstr=="break"){
+							break;
+						}
+						if(onstr=="codebox"){
 							i--;
+							break;
+						}
+						delete on;
+						equal_count=0;
+						on=new vector<Token>();
+					}
+					else{
+						if(token.Value=="="){
+							equal_count++;
+						}
+						if(equal_count>1){
+							error_list.push_back("错误："+Position(token.line,token.byte)+" 表达式中不允许出现多个'='");
 							break;
 						}
 						on->push_back(token);
 					}
-					local->insert(pair<string,data>(last_func_name,data(last_func_type,-1,vector<var>(),Trans_exp(*on))));
+				}
+				if(on!=NULL){
 					delete on;
 				}
 			}
-		}
-		else if(onstr=="codebox"){
-			Grammar_check(token.sub,temp,local);
-		}
-		else{
-			on=new vector<Token>();
-			for(;i<token_list.size();i++){
-				token=token_list[i];
-				if(token.Value==","||token.Value=="\n"||token.Type=="codebox"){
-					s.push_back(Token("exp","",token.line,token.byte,Trans_exp(*on)));
-					Check_exp(s.back().sub,local);
-					if(!error_list.empty()||token.Value=="\n"){
-						break;
-					}
-					if(token.Type=="codebox"){
-						i--;
-						break;
-					}
-					delete on;
-					on=new vector<Token>();
-				}
-				else{
-					on->push_back(token);
-				}
-			}
-			delete on;
+			last_return=false;
 		}
 		if(error_list.size()>0){
 			break;
@@ -798,6 +868,8 @@ vector<Token> Fold(vector<Token> &token_list){
 			byte=token.byte;
 			for(;i<token_list.size();i++){
 				token=token_list[i];
+				line=token.line;
+				byte=token.byte;
 				if(token.Value=="}"){
 					kh--;
 				}
@@ -835,6 +907,8 @@ void Compile_file(string File_name){
 		return;
 	}
 	vector<Token> token_list;
+	token_list.push_back(Token("break","\n",0,0));
+	token_list.push_back(Token("break","\n",0,0));
 	vector<string> temp;
 	Parse_Token(fp,&token_list);
 	if(error_list.size()==0){
