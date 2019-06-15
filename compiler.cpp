@@ -43,7 +43,9 @@ map<string,vector<string> > convert;
 
 stringstream stream;
 
-string last_func_name,last_func_type;
+vector<string> last_func_name,last_func_type;
+
+int digui=0,ceng=-1;
 
 bool last_func=false,inner_call=false;
 
@@ -52,16 +54,19 @@ public:
 	string Type,Value;
 	int line,byte;
 	vector<Token> sub;
-	Token(string type,string value,int Line,int b,vector<Token> Sub=vector<Token>()){
+	bool is_return;
+	Token(string type,string value,int Line,int b,vector<Token> Sub=vector<Token>(),bool is=false){
 		Type=type;
 		Value=value;
 		line=Line;
 		byte=b;
 		sub=Sub;
+		is_return=is;
 	}
 	Token(){
 		Type="";
 		Value="";
+		is_return=false;
 	}
 	string Tostring(){
 		string temp=Type+" "+Value+"\n";
@@ -531,14 +536,14 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 			error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'不是一个有效的类型");
 			return -1;
 		}
-		last_func_type=token.Value;
+		last_func_type.push_back(token.Value);
 		index++;
 		token=token_list[index];
 		if(global.find(token.Value)!=global.end()||domain->find(token.Value)!=domain->end()){
 			error_list.push_back("错误："+Position(token.line,token.byte)+" 变量'"+token.Value+"'被重复定义");
 			return -1;
 		}
-		last_func_name=token.Value;
+		last_func_name.push_back(token.Value);
 		index++;
 		token=token_list[index];
 		if(token.Value!="("){
@@ -643,11 +648,12 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 		for(int i=0;i<name.size();i++){
 			args.push_back(var(type[i],name[i]));
 		}
-		domain->insert(pair<string,data>(last_func_name,data(last_func_type,args.size(),args)));
+		domain->insert(pair<string,data>(last_func_name.back(),data(last_func_type.back(),args.size(),args)));
 		last_func=true;
 		last_arg=new vector<var>(args);
+		digui++;
 	}
-	else if(token.Value=="while"||token.Value=="if"){
+	else if(token.Value=="while"||token.Value=="if"||token.Value=="elseif"){
 		index++;
 		for(;index<token_list.size();index++){
 			if(token_list[index].Type=="codebox"){
@@ -700,17 +706,18 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 }
 
 void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,data> *domain){
-	string onstr;
-	Token token;
+	ceng++;
+	string onstr,t;
+	Token token,on_token;
 	vector<Token> *on=NULL,s;
 	map<string,data> *local=NULL;
 	var x=var("","");
-	bool last_f=last_func,last_return=false;
-	int equal_count;
+	bool last_return=false,is_return=false,is_block_return=false;
+	int equal_count,line=-1,byte=-1;
 	if(last_func){
 		last_func=false;
 		local=new map<string,data>();
-		local->insert(*domain->find(last_func_name));
+		local->insert(*domain->find(last_func_name.back()));
 		for(int i=0;i<last_arg->size();i++){
 			x=(*last_arg)[i];
 			local->insert(pair<string,data>(x.name,data(x.type)));
@@ -724,7 +731,25 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 		token=token_list[i];
 		onstr=token.Type;
 		if(onstr=="keyword"){
-			last_return=true;
+			if(token.Value=="return"){
+				if(last_return){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 函数返回值不能为空");
+					break;
+				}
+				else if(digui==0){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 非函数体内不能出现'return'");
+					break;
+				}
+				last_return=true;
+				is_return=true;
+			}
+			else if(token.Value=="if"||token.Value=="while"||token.Value=="else"||token.Value=="elseif"){
+				if(last_return){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'后不能为空");
+					break;
+				}
+				last_return=true;
+			}
 			i=Check_format(token_list,i,local);
 		}
 		else{
@@ -733,8 +758,8 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 					error_list.push_back("错误："+Position(token.line,token.byte)+" '"+token.Value+"'不是一个有效的类型");
 					break;
 				}
-				last_func_type=token.Value;
 				i++;
+				t=token.Value;
 				for(;i<token_list.size();i++){
 					token=token_list[i];
 					if(token.Type=="break"){
@@ -745,9 +770,9 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 						break;
 					}
 					else{
-						last_func_name=token.Value;
-						if(global.find(last_func_name)!=global.end()||local->find(last_func_name)!=local->end()){
-							error_list.push_back("错误："+Position(token.line,token.byte)+" '"+last_func_name+"'被重复定义");
+						onstr=token.Value;
+						if(global.find(onstr)!=global.end()||local->find(onstr)!=local->end()){
+							error_list.push_back("错误："+Position(token.line,token.byte)+" '"+onstr+"'被重复定义");
 							break;
 						}
 						i++;
@@ -763,7 +788,7 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 							}
 							on->push_back(token);
 						}
-						local->insert(pair<string,data>(last_func_name,data(last_func_type,-1,vector<var>(),Trans_exp(*on))));
+						local->insert(pair<string,data>(onstr,data(t,-1,vector<var>(),Trans_exp(*on))));
 						delete on;
 					}
 				}
@@ -773,32 +798,67 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 					error_list.push_back("错误："+Position(token.line,token.byte)+" 错误的'{'位置");
 					break;
 				}
+				if(!token.is_return&&!is_return){
+					is_block_return=token.is_return;
+					line=token.line;
+					byte=token.byte;
+				}
 				Grammar_check(token.sub,temp,local);
+				if(!error_list.empty()){
+					break;
+				}
+				if(digui-1==ceng){
+					last_func_type.pop_back();
+					last_func_name.pop_back();
+					digui--;
+				}
 			}
 			else{
 				on=new vector<Token>();
 				equal_count=0;
 				for(;i<token_list.size();i++){
 					token=token_list[i];
-					if(token.Value==","||token.Type=="break"||token.Type=="codebox"){
+					if(token.Value=="="){
+						equal_count++;
+					}
+					if(equal_count>1){
+						error_list.push_back("错误："+Position(token.line,token.byte)+" 表达式中不允许出现多个'='");
+						break;
+					}
+					else if(token.Value==","||token.Type=="break"||token.Type=="codebox"){
 						s.push_back(Token("exp","",token.line,token.byte,Trans_exp(*on)));
 						onstr=token.Type;
 						token=s.back();
-						if(token.sub.size()>1){
+						if(token.sub.size()>=1){
 							if(equal_count==0&&!last_return){
 								error_list.push_back("错误："+Position(token.line,token.byte)+" 表达式无法作为单独的语句存在");
 								break;
 							}
-							Check_exp(token.sub,local);
+							on_token=Check_exp(token.sub,local);
 							if(!error_list.empty()){
 								break;
 							}
+							if(is_return){
+								onstr=last_func_type.back();
+								if(on_token.Type!=onstr&&!Check_convert(onstr,on_token.Type)){
+									error_list.push_back("错误："+Position(token.line,token.byte)+" 类型为'"+onstr+"'的函数无法返回类型'"+on_token.Type+"'");
+									break;
+								}
+							}
 						}
 						else if(!token.sub.empty()){
-							if(token.sub[0].Type!="callbox"&&equal_count==0&&!last_return){
+							if(token.sub[0].Type!="callbox"&&!last_return){
 								token=token.sub[0];
 								error_list.push_back("错误："+Position(token.line,token.byte)+" 表达式无法作为单独的语句存在");
 								break;
+							}
+						}
+						else{
+							if(is_return){
+								if(on_token.Type==""&&last_func_type.back()!="void"){
+									error_list.push_back("错误："+Position(token.line,token.byte)+" 函数返回值不能为空");
+									break;
+								}
 							}
 						}
 						if(onstr=="break"){
@@ -813,13 +873,6 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 						on=new vector<Token>();
 					}
 					else{
-						if(token.Value=="="){
-							equal_count++;
-						}
-						if(equal_count>1){
-							error_list.push_back("错误："+Position(token.line,token.byte)+" 表达式中不允许出现多个'='");
-							break;
-						}
 						on->push_back(token);
 					}
 				}
@@ -828,14 +881,19 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 				}
 			}
 			last_return=false;
+			is_return=false;
 		}
 		if(error_list.size()>0){
 			break;
 		}
 	}
-	if(local!=NULL&&last_f){
+	if(local!=NULL&&last_func){
 		delete local;
 	}
+	if(line!=-1&&!is_block_return){
+		error_list.push_back("错误："+Position(line,byte)+" 语句块缺少'return'语句");
+	}
+	ceng--;
 }
 
 vector<Token> Fold(vector<Token> &token_list){
@@ -843,6 +901,7 @@ vector<Token> Fold(vector<Token> &token_list){
 	Token token;
 	string name;
 	int kh,line,byte;
+	bool is_return=false;
 	for(int i=0;i<token_list.size();i++){
 		token=token_list[i];
 		if(token.Type=="call"){
@@ -920,7 +979,10 @@ vector<Token> Fold(vector<Token> &token_list){
 				token=token_list[i];
 				line=token.line;
 				byte=token.byte;
-				if(token.Value=="}"){
+				if(token.Value=="return"){
+					is_return=true;
+				}
+				else if(token.Value=="}"){
 					kh--;
 				}
 				else if(token.Value=="{"){
@@ -936,7 +998,8 @@ vector<Token> Fold(vector<Token> &token_list){
 				break;
 			}
 
-			temp.push_back(Token("codebox","",line,byte,Fold(*arg)));
+			temp.push_back(Token("codebox","",line,byte,Fold(*arg),is_return));
+			is_return=false;
 			delete arg;
 			delete arg_list;
 		}
@@ -967,7 +1030,8 @@ void Compile_file(string File_name){
 	Token token=token_list.back();
 	token_list.push_back(Token("break","\n",token.line+1,0));
 	if(error_list.size()==0){
-		Grammar_check(token_list,&temp,new map<string,data>());
+		last_func=false;
+		Grammar_check(token_list,&temp,&global);
 	}
 	fclose(fp);
 }
@@ -985,6 +1049,7 @@ int main(int argc,char* argv[]){
 	conv_float.push_back("int");
 	convert["float"]=conv_float;
 	convert["string"]=vector<string>();
+	convert["void"]=vector<string>();
 	for(int i=1;i<argc;i++){
 		Compile_file(argv[i]);
 		if(error_list.size()>0){
