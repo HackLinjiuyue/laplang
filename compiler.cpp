@@ -45,21 +45,19 @@ stringstream stream;
 
 string last_func_name,last_func_type;
 
-bool last_func=false;
+bool last_func=false,inner_call=false;
 
 class Token{
 public:
 	string Type,Value;
 	int line,byte;
 	vector<Token> sub;
-	bool is_float;
-	Token(string type,string value,int Line,int b,vector<Token> Sub=vector<Token>(),bool is=false){
+	Token(string type,string value,int Line,int b,vector<Token> Sub=vector<Token>()){
 		Type=type;
 		Value=value;
 		line=Line;
 		byte=b;
 		sub=Sub;
-		is_float=is;
 	}
 	Token(){
 		Type="";
@@ -100,6 +98,12 @@ public:
 		argc=c;
 		args=arg;
 		init=i;
+	}
+	data(){
+		argc=-1;
+		type="";
+		args=vector<var>();
+		init=vector<Token>();
 	}
 };
 
@@ -167,7 +171,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 	string onstr(""),onget(" "),linshi,last_type;
 	char last_get;
 	int line=1,byte=0;
-	bool is_float=false,is_func=false;
+	bool is_func=false,is_float=false;
 	while(onget[0]!=EOF){
 		onget[0]=fgetc(fp);
 		byte++;
@@ -248,10 +252,10 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 					onget[0]=fgetc(fp);
 				}
 				if(is_float){
-					token_list->push_back(Token("float",onstr,line,byte,vector<Token>(),is_float));
+					token_list->push_back(Token("float",onstr,line,byte,vector<Token>()));
 				}
 				else{
-					token_list->push_back(Token("int",onstr,line,byte,vector<Token>(),is_float));
+					token_list->push_back(Token("int",onstr,line,byte,vector<Token>()));
 				}
 				is_float=false;
 				onstr="";
@@ -332,88 +336,6 @@ bool Check_convert(string on_type,string to_type){
 	return temp;
 }
 
-void Check_exp(vector<Token> &token_list,map<string,data> *domain){
-	vector<Token> stack;
-	Token token,op1,op2;
-	string op,type1,type2;
-	map<string,data>::iterator iter;
-	int equal_count=0;
-	for(int i=0;i<token_list.size();i++){
-		token=token_list[i];
-		op=token.Value;
-		if(token.Type=="op"){
-			op2=stack.back();
-			stack.pop_back();
-			if(op2.Type=="var"){
-				iter=domain->find(op2.Value);
-				if(iter==domain->end()){
-					iter=global.find(op2.Value);
-					if(iter==global.end()){
-						error_list.push_back("错误："+Position(op2.line,op2.byte)+" 变量'"+op2.Value+"'未定义");
-						break;
-					}
-				}
-				if(iter->second.argc!=-1){
-					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 函数指针'"+op2.Value+"'不能参与运算");
-					break;
-				}
-				type2=iter->second.type;
-			}
-			else{
-				type2=op2.Type;
-			}
-			if(op=="!"){
-				if(op2.Type!="bool"&&!Check_convert(op2.Type,"bool")){
-					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 类型'"+op2.Type+"'无法转换为'bool'类型进行非运算");
-					break;
-				}
-			}
-			else{
-				if(stack.size()==0){
-					error_list.push_back("错误："+Position(token.line,token.byte)+" 运算符'"+op+"'缺少第二个操作值");
-					break;
-				}
-				op1=stack.back();
-				stack.pop_back();
-				if(op1.Type=="var"){
-					iter=domain->find(op1.Value);
-					if(iter==domain->end()){
-						iter=global.find(op1.Value);
-						if(iter==global.end()){
-							error_list.push_back("错误："+Position(op1.line,op1.byte)+" 变量'"+op1.Value+"'未定义");
-							break;
-						}
-					}
-					if(iter->second.argc!=-1){
-						error_list.push_back("错误："+Position(op1.line,op1.byte)+" 函数'"+op1.Value+"'不能参与运算");
-						break;
-					}
-					type1=iter->second.type;
-				}
-				else{
-					type1=op1.Type;
-				}
-				if(type1!=type2&&!Check_convert(type2,type1)){
-					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 类型'"+type2+"'无法转换为'"+type1+"'类型进行'"+op+"'运算");
-					break;
-				}
-			}
-			stack.push_back(Token(type1,"",op2.line,op2.byte,vector<Token>(),false));
-		}
-		else{
-			stack.push_back(token);
-		}
-	}
-	if(!error_list.empty()){
-		return;
-	}
-	token=stack.back();
-	if(stack.size()>1){
-		error_list.push_back("错误："+Position(token.line,token.byte)+" 变量无法在没有运算符的情况下并列出现");
-		return;
-	}
-}
-
 vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛 优化和bug修复 魔凤啸天(hacklinjiuyue)
 {
 	stack<Token> s;
@@ -460,6 +382,133 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛 优化�
 	}
 	return out;
 }
+
+Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
+	vector<Token> stack,trans_list;
+	Token token,op1,op2;
+	string op,type1,type2;
+	map<string,data>::iterator iter;
+	data on_data;
+	int equal_count=0;
+	for(int i=0;i<token_list.size();i++){
+		token=token_list[i];
+		op=token.Value;
+		if(token.Type=="op"){
+			op2=stack.back();
+			stack.pop_back();
+			if(op2.Type=="var"){
+				iter=domain->find(op2.Value);
+				if(iter==domain->end()){
+					iter=global.find(op2.Value);
+				}
+				if(iter->second.argc!=-1){
+					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 函数指针'"+op2.Value+"'不能参与运算");
+					break;
+				}
+				type2=iter->second.type;
+			}
+			else{
+				type2=op2.Type;
+			}
+			if(op=="!"){
+				if(op2.Type!="bool"&&!Check_convert(op2.Type,"bool")){
+					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 类型'"+op2.Type+"'无法转换为'bool'类型进行非运算");
+					break;
+				}
+			}
+			else{
+				if(stack.size()==0){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 运算符'"+op+"'缺少第二个操作值");
+					break;
+				}
+				op1=stack.back();
+				stack.pop_back();
+				if(op1.Type=="var"){
+					iter=domain->find(op1.Value);
+					if(iter==domain->end()){
+						iter=global.find(op1.Value);
+					}
+					if(iter->second.argc!=-1){
+						error_list.push_back("错误："+Position(op1.line,op1.byte)+" 函数'"+op1.Value+"'不能参与运算");
+						break;
+					}
+					type1=iter->second.type;
+				}
+				else{
+					type1=op1.Type;
+				}
+				if(type1!=type2&&!Check_convert(type2,type1)){
+					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 类型'"+type2+"'无法转换为'"+type1+"'类型进行'"+op+"'运算");
+					break;
+				}
+			}
+			if(op=="="){
+				if(inner_call){
+					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 在函数列表中无法进行赋值");
+					break;
+				}
+			}
+			stack.push_back(Token(type1,"",op2.line,op2.byte,vector<Token>()));
+		}
+		else if(token.Type=="callbox"){
+			iter=domain->find(token.Value);
+			if(iter==domain->end()){
+				iter=global.find(token.Value);
+				if(iter==global.end()){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 函数'"+token.Value+"'未在该作用域中定义，也不是一个全局函数");
+					break;
+				}
+			}
+			on_data=iter->second;
+			if(on_data.argc!=token.sub.size()){
+				error_list.push_back("错误："+Position(token.line,token.byte)+" 调用函数'"+iter->first+"'所需的参数个数不匹配");
+				break;
+			}
+			inner_call=true;
+			for(int i=0;i<on_data.argc;i++){
+				trans_list=Trans_exp(token.sub[i].sub);
+				op1=Check_exp(trans_list,domain);
+				if(!error_list.empty()){
+					break;
+				}
+				if(op1.Type!=on_data.args[i].type&&!Check_convert(op1.Type,on_data.args[i].type)){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 调用函数'"+iter->first+"'时，参数"+Tostring(i+1)+"类型'"+op1.Type+"'与定义类型'"+on_data.args[i].type+"'不匹配");
+					break;
+				}
+			}
+			if(!error_list.empty()){
+				break;
+			}
+			inner_call=false;
+			stack.push_back(Token(on_data.type,"",token.line,token.byte,vector<Token>()));
+		}
+		else if(token.Type=="arg"){
+			stack.push_back(Check_exp(token.sub,domain));
+			if(!error_list.empty()){
+				break;
+			}
+		}
+		else{
+			if(token.Type=="var"){
+				if(domain->find(token.Value)==domain->end()&&global.find(token.Value)==global.end()){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 变量'"+token.Value+"'未在该作用域中定义，也不是一个全局变量");
+					break;
+				}
+			}
+			stack.push_back(token);
+		}
+	}
+	if(!error_list.empty()||stack.size()==0){
+		return Token();
+	}
+	token=stack.back();
+	if(stack.size()>1){
+		error_list.push_back("错误："+Position(token.line,token.byte)+" 变量无法在没有运算符的情况下并列出现");
+		return Token();
+	}
+	return token;
+}
+
 
 int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){//无错返回目标index,否则返回-1
 	Token token=token_list[index];
@@ -661,6 +710,7 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 	if(last_func){
 		last_func=false;
 		local=new map<string,data>();
+		local->insert(*domain->find(last_func_name));
 		for(int i=0;i<last_arg->size();i++){
 			x=(*last_arg)[i];
 			local->insert(pair<string,data>(x.name,data(x.type)));
@@ -935,9 +985,6 @@ int main(int argc,char* argv[]){
 	conv_float.push_back("int");
 	convert["float"]=conv_float;
 	convert["string"]=vector<string>();
-	FILE *fp=fopen(".\\log.txt","w");
-	fputs("",fp);
-	fclose(fp);
 	for(int i=1;i<argc;i++){
 		Compile_file(argv[i]);
 		if(error_list.size()>0){
