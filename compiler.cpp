@@ -9,7 +9,7 @@ using namespace std;
 
 //定义部分
 
-const string Symbols[25]={")","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","[","]","{","}","==",",","!"};
+const string Symbols[28]={")","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","[","]","{","}","==",",","!","//","/*","*/"};
 
 const string KeyWords[10]={"func","return","if","break","continue","while","for","class","else","elseif"};
 
@@ -173,14 +173,27 @@ string Position(int line,int byte){
 }
 
 void Parse_Token(FILE *fp,vector<Token> *token_list){
-	string onstr(""),onget(" "),linshi,last_type;
+	string onstr(""),onget(" "),linshi,last_type,last_op("");
 	char last_get;
 	int line=1,byte=0;
 	bool is_func=false,is_float=false;
 	while(onget[0]!=EOF){
 		onget[0]=fgetc(fp);
 		byte++;
-		if(onget[0]==EOF){
+		if(linshi=="//"){
+			while(onget[0]!=EOF&&onget[0]!='\n'){
+				onget[0]=fgetc(fp);
+				if(onget[0]=='\n'){
+					line++;
+					byte=0;
+					token_list->push_back(Token("break","\n",line,1));
+					break;
+				}
+			}
+			linshi="";
+			continue;
+		}
+		else if(onget[0]==EOF){
 			if(onstr.length()>0){
 				token_list->push_back(Token(last_type,onstr,line,byte));
 			}
@@ -216,15 +229,20 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				onstr="";
 			}
 		}
-		else if(Is_in_s(Symbols,&onget,25)){
+		else if(Is_in_s(Symbols,&onget,28)){
 			if(last_type!="op"&&onstr.length()>0){
 				token_list->push_back(Token(last_type,onstr,line,byte));
 				onstr="";
 			}
-			last_type="op";
-			linshi=onstr+onget[0];
-			if(Is_in_s(Symbols,&linshi,25)&&linshi.length()>1){
-				token_list->push_back(Token("op",linshi,line,byte));
+			linshi=last_op+onget[0];
+			last_op=onget;
+			if(Is_in_s(Symbols,&linshi,28)&&linshi.size()>1){
+				if(last_type=="op"){
+					token_list->pop_back();
+				}
+				if(linshi!="//"){
+					token_list->push_back(Token("op",linshi,line,byte));
+				}
 			}
 			else{
 				if(onget[0]=='('&&token_list->back().Type=="var"&&!is_func){
@@ -235,6 +253,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 					is_func=false;
 				}
 			}
+			last_type="op";
 		}
 		else if(Is_in_s(Num,&onget,10)){
 			if(last_type!="var"&&last_type!="type"){
@@ -256,6 +275,9 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 					}
 					onget[0]=fgetc(fp);
 				}
+				if(!error_list.empty()){
+					break;
+				}
 				if(is_float){
 					token_list->push_back(Token("float",onstr,line,byte,vector<Token>()));
 				}
@@ -264,15 +286,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				}
 				is_float=false;
 				onstr="";
-				if(onget[0]!=EOF){
-					if(onget[0]=='\n'){
-						token_list->push_back(Token("break","\n",line,byte));
-						line++;
-					}
-					else{
-						token_list->push_back(Token("op",onget,line,byte));
-					}
-				}
+				fseek(fp,-1,SEEK_CUR);
 			}
 			else{
 				onstr+=onget[0];
@@ -282,7 +296,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			onstr="";
 			onget[0]=fgetc(fp);
 			while(onget[0]!='"'){
-				if(onget[0]==';'||onget[0]=='\n'||onget[0]==EOF){
+				if(onget[0]=='\n'||onget[0]==EOF){
 					error_list.push_back("错误："+Position(line,byte)+" 字符串末尾缺少<\">");
 					break;
 				}
@@ -306,6 +320,9 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 		if(error_list.size()>0){
 			break;
 		}
+	}
+	for(int i=0;i<token_list->size();i++){
+		cout<<(*token_list)[i].Value<<"\n";
 	}
 }
 
@@ -451,6 +468,13 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 				if(inner_call){
 					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 在函数列表中无法进行赋值");
 					break;
+				}
+				if(op1.Type!="var"){
+					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 非变量无法进行赋值");
+					break;
+				}
+				if(op2.Type=="list"){
+
 				}
 			}
 			stack.push_back(Token(type1,"",op2.line,op2.byte,vector<Token>()));
@@ -904,7 +928,22 @@ vector<Token> Fold(vector<Token> &token_list){
 	bool is_return=false;
 	for(int i=0;i<token_list.size();i++){
 		token=token_list[i];
-		if(token.Type=="call"){
+		if(token.Value=="/*"){
+			i++;
+			for(;i<token_list.size();i++){
+				token=token_list[i];
+				if(token.Value=="*/"){
+					break;
+				}
+			}
+			if(i==token_list.size()){
+				error_list.push_back("错误："+Position(token.line,token.byte)+" 注释语句缺少结束符'/*'");
+			}
+		}
+		else if(token.Value=="*/"){
+			error_list.push_back("错误："+Position(line,byte)+" 注释语句缺少起始符'/*'");
+		}
+		else if(token.Type=="call"){
 			kh=1;
 			arg=new vector<Token>();
 			arg_list=new vector<Token>();
@@ -999,6 +1038,36 @@ vector<Token> Fold(vector<Token> &token_list){
 			}
 
 			temp.push_back(Token("codebox","",line,byte,Fold(*arg),is_return));
+			is_return=false;
+			delete arg;
+			delete arg_list;
+		}
+		else if(token.Value=="["){
+			arg=new vector<Token>();
+			kh=1;
+			i++;
+			line=token.line;
+			byte=token.byte;
+			for(;i<token_list.size();i++){
+				token=token_list[i];
+				line=token.line;
+				byte=token.byte;
+				if(token.Value=="]"){
+					kh--;
+				}
+				else if(token.Value=="["){
+					kh++;
+				}
+				if(kh==0){
+					break;
+				}
+				arg->push_back(token);
+			}
+			if(kh>0){
+				error_list.push_back("错误："+Position(line,byte)+" 列表缺少']'");
+				break;
+			}
+			temp.push_back(Token("list","",line,byte,Fold(*arg),is_return));
 			is_return=false;
 			delete arg;
 			delete arg_list;
