@@ -321,9 +321,6 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			break;
 		}
 	}
-	for(int i=0;i<token_list->size();i++){
-		cout<<(*token_list)[i].Value<<"\n";
-	}
 }
 
 int op_Level(const string op)
@@ -539,7 +536,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 }
 
 
-int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){//无错返回目标index,否则返回-1
+int Check_format(vector<Token> &token_list,int index,map<string,data> *domain,vector<string> *on_var){//无错返回目标index,否则返回-1
 	Token token=token_list[index];
 
 	bool is_block=false;
@@ -674,6 +671,7 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain){/
 		}
 		domain->insert(pair<string,data>(last_func_name.back(),data(last_func_type.back(),args.size(),args)));
 		last_func=true;
+		on_var->push_back(last_func_name.back());
 		last_arg=new vector<var>(args);
 		digui++;
 	}
@@ -735,6 +733,7 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 	Token token,on_token;
 	vector<Token> *on=NULL,s;
 	map<string,data> *local=NULL;
+	vector<string> on_var;
 	var x=var("","");
 	bool last_return=false,is_return=false,is_block_return=false;
 	int equal_count,line=-1,byte=-1;
@@ -774,7 +773,7 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 				}
 				last_return=true;
 			}
-			i=Check_format(token_list,i,local);
+			i=Check_format(token_list,i,local,&on_var);
 		}
 		else{
 			if(onstr=="type"){
@@ -814,6 +813,7 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 						}
 						local->insert(pair<string,data>(onstr,data(t,-1,vector<var>(),Trans_exp(*on))));
 						delete on;
+						on_var.push_back(onstr);
 					}
 				}
 			}
@@ -854,7 +854,7 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 						onstr=token.Type;
 						token=s.back();
 						if(token.sub.size()>=1){
-							if(equal_count==0&&!last_return){
+							if(equal_count==0&&!last_return&&token.sub[0].Type!="callbox"){
 								error_list.push_back("错误："+Position(token.line,token.byte)+" 表达式无法作为单独的语句存在");
 								break;
 							}
@@ -918,6 +918,9 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 		error_list.push_back("错误："+Position(line,byte)+" 语句块缺少'return'语句");
 	}
 	ceng--;
+	for(int i=0;i<on_var.size();i++){
+		local->erase(on_var[i]);
+	}
 }
 
 vector<Token> Fold(vector<Token> &token_list){
@@ -1122,11 +1125,11 @@ int main(int argc,char* argv[]){
 	for(int i=1;i<argc;i++){
 		Compile_file(argv[i]);
 		if(error_list.size()>0){
-			cout<<"在"<<argv[i]<<"：\n";
+			printf("在%s：\n",argv[i]);
 			for(int i=0;i<error_list.size();i++){
-				cout<<error_list[i]<<"\n";
+				printf("%s\n",error_list[i].c_str());
 			}
-			error_list.clear();
+			break;
 		}
 	}
 	system("pause");
