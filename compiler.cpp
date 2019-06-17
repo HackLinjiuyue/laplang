@@ -4,6 +4,7 @@
 #include<algorithm>
 #include<sstream>
 #include<stack>
+#include<math.h>
 
 using namespace std;
 
@@ -47,7 +48,7 @@ vector<string> last_func_name,last_func_type;
 
 int digui=0,ceng=-1;
 
-bool last_func=false,inner_call=false;
+bool last_func=false,inner_call=false,inner_list=false;
 
 class Token{
 public:
@@ -67,6 +68,9 @@ public:
 		Type="";
 		Value="";
 		is_return=false;
+		line=0;
+		byte=0;
+		sub=vector<Token>();
 	}
 	string Tostring(){
 		string temp=Type+" "+Value+"\n";
@@ -98,23 +102,30 @@ public:
 	int argc;
 	vector<var> args;
 	vector<Token> init;
-	data(string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>()){
+	vector<int> arr_len;
+	data(string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>()){
 		type=t;
 		argc=c;
 		args=arg;
 		init=i;
+		arr_len=len;
 	}
 	data(){
 		argc=-1;
 		type="";
 		args=vector<var>();
 		init=vector<Token>();
+		arr_len=vector<int>();
 	}
 };
 
 vector<var> *last_arg=NULL;
 
+vector<int> empty_dep_list;
+
 map<string,data> global;
+
+Token Check_exp(vector<Token> &token_list,map<string,data> *domain);
 
 //
 //
@@ -132,6 +143,14 @@ bool Is_in_s(const string *onstr,const string *onget,int count){
 			temp=true;
 			break;
 		}
+	}
+	return temp;
+}
+
+int stoi(string &onstr){
+	int temp=0,max=onstr.length();
+	for(int i=0;i<max;i++){
+		temp+=(onstr[max-i-1]-'0')*(int)pow(10,i);
 	}
 	return temp;
 }
@@ -271,6 +290,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 						}
 						else{
 							error_list.push_back("错误："+Position(line,byte)+" 数字格式错误");
+							break;
 						}
 					}
 					onget[0]=fgetc(fp);
@@ -402,10 +422,57 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛 优化�
 	return out;
 }
 
+void Type_check_list(vector<Token> &on_list,string type,int *on_depth,int dest_depth,map<string,data> *domain,vector<int> &dep_list,string pos){
+	int *depth=NULL,len;
+	size_t size;
+	Token token;
+	string on_type;
+	if(on_depth==NULL){
+		depth=new int(0);
+	}
+	else{
+		depth=on_depth;
+	}
+	if(*depth<dest_depth-1){
+		on_type="list";
+		len=dep_list[*depth];
+	}
+	else{
+		on_type=type;
+		len=dest_depth;
+	}
+	size=on_list.size();
+	if(len!=size){
+		error_list.push_back("错误："+pos+" 静态数组初始化列表中成员列表长度与定义长度不相符 "+Position(size,len));
+		return;
+	}
+	for(int i=0;i<on_list.size();i++){
+		token.sub=Trans_exp(on_list[i].sub);
+		inner_list=true;
+		token=Check_exp(token.sub,domain);
+		if(!error_list.empty()){
+			break;
+		}
+		inner_list=false;
+		if(token.Type!=on_type){
+			error_list.push_back("错误："+Position(token.line,token.byte)+" 静态数组初始化列表中成员类型不相符");
+			break;
+		}
+		if(on_type=="list"){
+			(*depth)++;
+			Type_check_list(token.sub,type,depth,dest_depth,domain,dep_list,pos);
+			(*depth)--;
+		}
+	}
+	if(*depth==0){
+		delete depth;
+	}
+}
+
 Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 	vector<Token> stack,trans_list;
 	Token token,op1,op2;
-	string op,type1,type2;
+	string op,type1="",type2="";
 	map<string,data>::iterator iter;
 	data on_data;
 	int equal_count=0;
@@ -456,22 +523,35 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 				else{
 					type1=op1.Type;
 				}
-				if(type1!=type2&&!Check_convert(type2,type1)){
+				if(op=="="){
+					if(inner_call){
+						error_list.push_back("错误："+Position(op2.line,op2.byte)+" 在函数列表中无法进行赋值");
+						break;
+					}
+					if(op1.Type!="var"){
+						error_list.push_back("错误："+Position(op2.line,op2.byte)+" 非变量无法进行赋值");
+						break;
+					}
+					if(!iter->second.arr_len.empty()){
+						if(type2!="list"){
+							error_list.push_back("错误："+Position(op2.line,op2.byte)+" 静态数组赋值必须使用列表");
+							break;
+						}
+						Type_check_list(op2.sub,type1,NULL,iter->second.arr_len.size(),domain,iter->second.arr_len,Position(op2.line,op2.byte));
+						if(!error_list.empty()){
+							break;
+						}
+					}
+					else{
+						if(type1!=type2&&!Check_convert(type2,type1)){
+							error_list.push_back("错误："+Position(op2.line,op2.byte)+" 类型'"+type2+"'无法转换为'"+type1+"'类型进行'='运算");
+							break;
+						}
+					}
+				}
+				else if(type1!=type2&&!Check_convert(type2,type1)){
 					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 类型'"+type2+"'无法转换为'"+type1+"'类型进行'"+op+"'运算");
 					break;
-				}
-			}
-			if(op=="="){
-				if(inner_call){
-					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 在函数列表中无法进行赋值");
-					break;
-				}
-				if(op1.Type!="var"){
-					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 非变量无法进行赋值");
-					break;
-				}
-				if(op2.Type=="list"){
-
 				}
 			}
 			stack.push_back(Token(type1,"",op2.line,op2.byte,vector<Token>()));
@@ -534,7 +614,6 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 	}
 	return token;
 }
-
 
 int Check_format(vector<Token> &token_list,int index,map<string,data> *domain,vector<string> *on_var){//无错返回目标index,否则返回-1
 	Token token=token_list[index];
@@ -731,11 +810,12 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 	ceng++;
 	string onstr,t;
 	Token token,on_token;
-	vector<Token> *on=NULL,s;
+	vector<Token> *on=NULL,s,*on_init=NULL;
 	map<string,data> *local=NULL;
 	vector<string> on_var;
+	vector<int> *on_list=NULL;
 	var x=var("","");
-	bool last_return=false,is_return=false,is_block_return=false;
+	bool last_return=false,is_return=false,is_arr=false,is_block_return=false;
 	int equal_count,line=-1,byte=-1;
 	if(last_func){
 		last_func=false;
@@ -783,6 +863,29 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 				}
 				i++;
 				t=token.Value;
+				token=token_list[i];
+				is_arr=false;
+				if(token.Type=="list"){
+					on_list=new vector<int>();
+					for(int ii=0;ii<token.sub.size();ii++){
+						on_token=token.sub[ii];
+						if(on_token.sub.empty()){
+							error_list.push_back("错误："+Position(on_token.line,on_token.byte)+" 静态数组定义长度不能为空");
+							break;
+						}
+						on_token=on_token.sub[0];
+						if(on_token.Type!="int"){
+							error_list.push_back("错误："+Position(on_token.line,on_token.byte)+" 静态数组定义长度必须是整数常数");
+							break;
+						}
+						on_list->push_back(stoi(on_token.Value));
+					}
+					is_arr=true;
+					i++;
+				}
+				if(!error_list.empty()){
+					break;
+				}
 				for(;i<token_list.size();i++){
 					token=token_list[i];
 					if(token.Type=="break"){
@@ -798,7 +901,6 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 							error_list.push_back("错误："+Position(token.line,token.byte)+" '"+onstr+"'被重复定义");
 							break;
 						}
-						i++;
 						on=new vector<Token>();
 						for(;i<token_list.size();i++){
 							token=token_list[i];
@@ -811,11 +913,24 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 							}
 							on->push_back(token);
 						}
-						local->insert(pair<string,data>(onstr,data(t,-1,vector<var>(),Trans_exp(*on))));
+						on_init=new vector<Token>(Trans_exp(*on));
 						delete on;
+						if(is_arr){
+							local->insert(pair<string,data>(onstr,data(t,-1,vector<var>(),*on_init,*on_list)));
+							delete on_list;
+						}
+						else{
+							local->insert(pair<string,data>(onstr,data(t,-1,vector<var>(),*on_init)));
+						}
+						Check_exp(*on_init,local);
+						delete on_init;
+						if(!error_list.empty()){
+							break;
+						}
 						on_var.push_back(onstr);
 					}
 				}
+				on_token=Token();
 			}
 			else if(onstr=="codebox"){
 				if(token_list[i-1].Type=="var"){
@@ -941,10 +1056,12 @@ vector<Token> Fold(vector<Token> &token_list){
 			}
 			if(i==token_list.size()){
 				error_list.push_back("错误："+Position(token.line,token.byte)+" 注释语句缺少结束符'/*'");
+				break;
 			}
 		}
 		else if(token.Value=="*/"){
 			error_list.push_back("错误："+Position(line,byte)+" 注释语句缺少起始符'/*'");
+			break;
 		}
 		else if(token.Type=="call"){
 			kh=1;
@@ -984,6 +1101,44 @@ vector<Token> Fold(vector<Token> &token_list){
 				break;
 			}
 			temp.push_back(Token("callbox",name,line,byte,*arg_list));
+			delete arg_list;
+			delete arg;
+		}
+		else if(token.Value=="["){
+			kh=1;
+			arg=new vector<Token>();
+			arg_list=new vector<Token>();
+			line=token.line;
+			byte=token.byte;
+			i++;
+			for(;i<token_list.size();i++){
+				token=token_list[i];
+				if(token.Value=="["){
+					kh++;
+				}
+				else if(token.Value=="]"){
+					kh--;
+				}
+				if(kh==0){
+					if(arg->size()>0){
+						arg_list->push_back(Token("element","",token.line,token.byte,Fold(*arg)));
+					}
+					break;
+				}
+				else if(token.Value==","&&kh==1){
+					arg_list->push_back(Token("element","",token.line,token.byte,Fold(*arg)));
+					delete arg;
+					arg=new vector<Token>();
+				}
+				else{
+					arg->push_back(token);
+				}
+			}
+			if(kh>0){
+				error_list.push_back("错误："+Position(line,byte)+" 列表定义缺少']'");
+				break;
+			}
+			temp.push_back(Token("list","",line,byte,*arg_list));
 			delete arg_list;
 			delete arg;
 		}
@@ -1043,37 +1198,6 @@ vector<Token> Fold(vector<Token> &token_list){
 			temp.push_back(Token("codebox","",line,byte,Fold(*arg),is_return));
 			is_return=false;
 			delete arg;
-			delete arg_list;
-		}
-		else if(token.Value=="["){
-			arg=new vector<Token>();
-			kh=1;
-			i++;
-			line=token.line;
-			byte=token.byte;
-			for(;i<token_list.size();i++){
-				token=token_list[i];
-				line=token.line;
-				byte=token.byte;
-				if(token.Value=="]"){
-					kh--;
-				}
-				else if(token.Value=="["){
-					kh++;
-				}
-				if(kh==0){
-					break;
-				}
-				arg->push_back(token);
-			}
-			if(kh>0){
-				error_list.push_back("错误："+Position(line,byte)+" 列表缺少']'");
-				break;
-			}
-			temp.push_back(Token("list","",line,byte,Fold(*arg),is_return));
-			is_return=false;
-			delete arg;
-			delete arg_list;
 		}
 		else{
 			temp.push_back(token);
