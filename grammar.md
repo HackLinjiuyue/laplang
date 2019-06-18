@@ -19,3 +19,7 @@ while(cond){}
 class name{} 不分公私有 without public/private
 
 以换行作为结束符 use `\n` to separate lines
+
+#静态数组定义 static array define
+
+type\[len_list] name=\[value_list]
