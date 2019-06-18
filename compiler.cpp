@@ -438,8 +438,8 @@ void Type_check_list(vector<Token> &on_list,string type,int *on_depth,int dest_d
 		len=dep_list[*depth];
 	}
 	else{
+		len=dep_list[0];
 		on_type=type;
-		len=dest_depth;
 	}
 	size=on_list.size();
 	if(len!=size){
@@ -455,6 +455,7 @@ void Type_check_list(vector<Token> &on_list,string type,int *on_depth,int dest_d
 		}
 		inner_list=false;
 		if(token.Type!=on_type){
+			cout<<token.Type<<on_type<<"\n";
 			error_list.push_back("错误："+Position(token.line,token.byte)+" 静态数组初始化列表中成员类型不相符");
 			break;
 		}
@@ -534,7 +535,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 					}
 					if(!iter->second.arr_len.empty()){
 						if(type2!="list"){
-							error_list.push_back("错误："+Position(op2.line,op2.byte)+" 静态数组赋值必须使用列表");
+							error_list.push_back("错误："+Position(op2.line,op2.byte)+" 变量'"+iter->first+"'作为静态数组赋值必须使用列表");
 							break;
 						}
 						Type_check_list(op2.sub,type1,NULL,iter->second.arr_len.size(),domain,iter->second.arr_len,Position(op2.line,op2.byte));
@@ -866,6 +867,10 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 				token=token_list[i];
 				is_arr=false;
 				if(token.Type=="list"){
+					if(token.sub.empty()){
+						error_list.push_back("错误："+Position(token.line,token.byte)+" 静态数组定义长度不能为空");
+						break;
+					}
 					on_list=new vector<int>();
 					for(int ii=0;ii<token.sub.size();ii++){
 						on_token=token.sub[ii];
@@ -917,7 +922,6 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 						delete on;
 						if(is_arr){
 							local->insert(pair<string,data>(onstr,data(t,-1,vector<var>(),*on_init,*on_list)));
-							delete on_list;
 						}
 						else{
 							local->insert(pair<string,data>(onstr,data(t,-1,vector<var>(),*on_init)));
@@ -931,6 +935,9 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 					}
 				}
 				on_token=Token();
+				if(is_arr){
+					delete on_list;
+				}
 			}
 			else if(onstr=="codebox"){
 				if(token_list[i-1].Type=="var"){
