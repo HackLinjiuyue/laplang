@@ -304,7 +304,7 @@ void free_VM(LapVM **vm){
 	free(on->const_type);
 	free(on->const_pool);
 	if(on->stack!=NULL){
-	for(int i=0;i<on->stack_size;i++){
+		for(int i=0;i<on->stack_size;i++){
 			if(on->stack[i]!=NULL){
 				free_data(&on->stack[i],on->stack_type[i]);
 			}
@@ -473,6 +473,7 @@ LapVM* Initialize_VM(char path[]){
 	temp->const_pool=const_pool;
 	temp->const_type=const_type;
 	temp->stack_size=0;
+	temp->stack=NULL;
 	temp->pool_stack=(Pool**)malloc(sizeof(Pool*[1]));
 	temp->pool_stack[0]=Initialize_Pool(0,GLOBAL_REG_NUM);
 	temp->pool_stack[0]->pool_size=global;
@@ -669,7 +670,7 @@ void NOT (LapVM* env){
 	int op1=on_ins[1];
 	Pool *pool=env->pool_stack[env->on_stack];
 	char type1=pool->reg_type[op1];
-	if(type1==0){
+	if(type1==0||type1==4){
 		*(int*)pool->regs[op1]=!*(int*)pool->regs[op1];
 	}
 	else if(type1==2){
@@ -697,7 +698,7 @@ void OR (LapVM* env){
 	int op1=on_ins[1],op2=on_ins[2];
 	Pool *pool=env->pool_stack[env->on_stack];
 	char type1=pool->reg_type[op1],type2=pool->reg_type[op2];
-	if(type1==0&&type1==type2){
+	if(type1==4){
 		*(int*)pool->regs[op1]=*(int*)pool->regs[op1]||*(int*)pool->regs[op2];
 	}
 	else if(type1==2){
@@ -714,7 +715,7 @@ void AND (LapVM* env){
 	int op1=on_ins[1],op2=on_ins[2];
 	Pool *pool=env->pool_stack[env->on_stack];
 	char type1=pool->reg_type[op1],type2=pool->reg_type[op2];
-	if(type1==0&&type1==type2){
+	if(type1==4){
 		*(int*)pool->regs[op1]=*(int*)pool->regs[op1]&&*(int*)pool->regs[op2];
 	}
 	else if(type1==2){
