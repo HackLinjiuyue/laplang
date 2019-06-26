@@ -63,7 +63,7 @@ using namespace std;
 
 const char* HEX="0123456789abcdef";
 
-const string Symbols[28]={")","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","[","]","{","}","==",",","!","//","/*","*/"};
+const string Symbols[29]={")","|","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","[","]","{","}","==",",","!","//","/*","*/"};
 
 const string KeyWords[10]={"func","return","if","break","continue","while","for","class","else","elseif"};
 
@@ -71,7 +71,7 @@ const string Basic_type[6]={"int","float","double","bool","string","void"};
 
 const string Num[10]={"0","1","2","3","4","5","6","7","8","9"};
 
-vector<string> int_op,float_op,double_op,string_op;
+vector<string> int_op,float_op,double_op,string_op,bool_op;
 
 const string Bool[2]={"true","false"};
 
@@ -79,13 +79,17 @@ const string Func_lack_msg[3]={"类型","函数名","'('"};
 
 const string Num_basic[11]={"+","-","*","/","%",">","<","==","!=",">=","<="};
 
+const string Logic[]={"&&","||"};
+
 const string Num_ins[11]={add,SUB,mul,div,mod,GT,LT,EQ,NOTEQ,NOTLT,NOTGT};
 
+const string Logic_ins[2]={AND,OR};
+
 const string l1[] = { "+" , "-" };
-const string l2[] = { "*","/","<<",">>","!","%" };
+const string l2[] = { "*","/","<<",">>","%" };
 const string l3[] = { "^" };
 const string l4[] = { "||","&&" };
-const string l5[] = { "==",">","<",">=","<=","!=" };
+const string l5[] = { "==",">","<",">=","<=","!=","!"};
 const string l6[] = { "=" };
 const string l7[] = { "@" };
 
@@ -362,14 +366,14 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				onstr="";
 			}
 		}
-		else if(Is_in_s(Symbols,&onget,28)){
+		else if(Is_in_s(Symbols,&onget,29)){
 			if(last_type!="op"&&onstr.length()>0){
 				token_list->push_back(Token(last_type,onstr,line,byte));
 				onstr="";
 			}
 			linshi=last_op+onget[0];
 			last_op=onget;
-			if(Is_in_s(Symbols,&linshi,28)&&linshi.size()>1){
+			if(Is_in_s(Symbols,&linshi,29)&&linshi.size()>1){
 				if(last_type=="op"){
 					token_list->pop_back();
 				}
@@ -472,13 +476,13 @@ int op_Level(const string op)
 {
 	if(Is_in_s(l1,&op,2))
 		return 1;
-	if (Is_in_s(l2, &op, 6))
+	if (Is_in_s(l2, &op, 5))
 		return 2;
 	if (Is_in_s(l3, &op, 1))
 		return 3;
 	if (Is_in_s(l4, &op, 2))
 		return 4;
-	if (Is_in_s(l5, &op, 6))
+	if (Is_in_s(l5, &op, 7))
 		return 5;
 	if (Is_in_s(l6, &op, 1))
 		return 0;
@@ -655,6 +659,10 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 		token=token_list[i];
 		op=token.Value;
 		if(token.Type=="op"){
+			if(stack.empty()){
+				error_list.push_back("错误："+Position(token.line,token.byte)+" 运算符'"+op+"'缺少第二个操作值");
+				break;
+			}
 			op2=stack.back();
 			stack.pop_back();
 			if(op2.Type=="var"){
@@ -677,6 +685,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 					break;
 				}
 				out_ins+=Encode_ins(NOT,stack.size(),0,0);
+				type1="bool";
 			}
 			else{
 				if(stack.size()==0){
@@ -742,9 +751,13 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 				}
 				else{
 					if(Is_in_s(Num_basic,&op,11)){
-						id1=stack.size();
-						out_ins+=Encode_ins(Num_ins[index],id1,id1+1,0);
+						op=Num_ins[index];
 					}
+					else if(Is_in_s(Logic,&op,2)){
+						op=Logic_ins[index];
+					}
+					id1=stack.size();
+					out_ins+=Encode_ins(op,id1,id1+1,0);
 				}
 			}
 			if(stack.size()>MAX_EXP_STACK_LENGTH){
@@ -1560,11 +1573,14 @@ int main(int argc,char* argv[]){
 	string_op.push_back("!=");
 	string_op.push_back("==");
 	string_op.push_back("+");
+	bool_op.push_back("&&");
+	bool_op.push_back("||");
 	have_op.insert(pair<string,vector<string> >("int",int_op));
-	have_op["float"]=float_op;
-	have_op["double"]=double_op;
-	have_op["string"]=string_op;
+	have_op.insert(pair<string,vector<string> >("float",float_op));
+	have_op.insert(pair<string,vector<string> >("double",double_op));
+	have_op.insert(pair<string,vector<string> >("string",string_op));
 	have_op["void"]=vector<string>();
+	have_op.insert(pair<string,vector<string> >("bool",bool_op));
 	Compile_file(argv[1]);
 	if(error_list.size()>0){
 		printf("在%s：\n",argv[1]);
