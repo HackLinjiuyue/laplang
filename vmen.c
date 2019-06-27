@@ -8,6 +8,7 @@
 #define ERR_OUT_OF_MEM "error:Out of memory!\n"
 #define ERR_DIV_ZERO "error:Div 0!\n"
 
+#define MAX_STACK_SIZE 20
 #define MAX_CALL_STACK_DEPTH 256
 
 #define GLOBAL_REG_NUM 100
@@ -30,7 +31,7 @@ typedef struct{
 }Pool;
 
 typedef struct{
-	int pc,pool_size,const_size,pool_stack_size,*global_pool_type,*stack_type,*const_type,ins_max,stack_size,on_stack;
+	int pc,*pc_stack,pool_size,const_size,pool_stack_size,*global_pool_type,*stack_type,*const_type,ins_max,stack_size,on_stack,reg_size;
 	void **global_pool,**stack,**const_pool;
 	Pool **pool_stack;
 	char** ins;
@@ -311,6 +312,7 @@ void free_VM(LapVM **vm){
 		}
 		free(on->stack);
 		free(on->stack_type);
+		free(on->pc_stack);
 	}
 	for(int i=0;i<on->pool_size;i++){
 		if(on->global_pool[i]!=NULL){
@@ -344,7 +346,7 @@ LapVM* Initialize_VM(char path[]){
 		printf(ERR_FILE_NOT_FOUND);
 		return NULL;
 	}
-	char *magic_num=(char*)malloc(sizeof(char[22])),onget,*onstr=NULL,**ins=NULL;
+	char *magic_num=(char*)malloc(sizeof(char[26])),onget,*onstr=NULL,**ins=NULL;
 	int is_ok=1,reg,global,pool,pc=0,count,*const_type=NULL;
 	void **const_pool=NULL;
 	for(int i=0;i<22;i++){
@@ -474,12 +476,14 @@ LapVM* Initialize_VM(char path[]){
 	temp->const_type=const_type;
 	temp->stack_size=0;
 	temp->stack=NULL;
+	temp->pc_stack=NULL;
 	temp->pool_stack=(Pool**)malloc(sizeof(Pool*[1]));
-	temp->pool_stack[0]=Initialize_Pool(0,GLOBAL_REG_NUM);
+	temp->pool_stack[0]=Initialize_Pool(0,reg);
 	temp->pool_stack[0]->pool_size=global;
 	temp->pool_stack[0]->pool_type=temp->global_pool_type;
 	temp->pool_stack[0]->local_pool=temp->global_pool;
 	temp->on_stack=0;
+	temp->reg_size=reg;
 	return temp;
 }
 
@@ -491,9 +495,6 @@ void Sadd(String *s1,String *s2){
 		return;
 	}
 	strcat(s1->str,s2->str);
-}
-
-void null (LapVM* env){
 }
 void add (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -736,8 +737,35 @@ void true_jump (LapVM* env){
 void jmp (LapVM* env){
 	
 }
-void GOTO (LapVM* env){
-	
+void GOTO (LapVM* env){//参数个数 寄存器末尾id(+1为常量索引) 最大255个局部量
+	char* ins=env->ins[env->pc];
+	int *on=NULL,max=ins[1],arg_count=0,reg=ins[2];
+	env->stack=(void**)malloc(sizeof(void*[max-1]));
+	env->stack_type=(int*)malloc(sizeof(int[max-1]));
+	on=(int*)realloc(env->pc_stack,sizeof(int[max--]));
+	if(on==NULL){
+		is_err=1;
+		printf(ERR_OUT_OF_MEM);
+		return;
+	}
+	env->pc_stack=on;
+	Pool* pool=env->pool_stack[env->on_stack];
+	for(int i=max;i>-1;i--){
+		env->stack[arg_count]=pool->regs[reg];
+		env->stack_type[arg_count]=pool->reg_type[reg--];
+		arg_count++;
+	}
+	env->pc_stack[env->on_stack]=env->pc;//比其他栈-1
+	env->pc=(int)(pool->regs[reg+1]);
+	env->on_stack++;
+	env->pool_stack[env->on_stack]=Initialize_Pool(255,env->reg_size);
+	pool=env->pool_stack[env->on_stack];
+	max++;
+	for(int i=0;i<max;i++){
+		set_var_mem(&pool->local_pool[i],env->stack[i],env->stack_type[i]);
+	}
+	free(env->stack);
+	free(env->stack_type);
 }
 void RETURN (LapVM* env){
 	
@@ -814,7 +842,7 @@ void push_str (LapVM* env){
 	
 }
 
-void(*ins[35])(LapVM*)={null,add,SUB,mul,div,mod,LT,EQ,GT,NOTLT,
+void(*ins[35])(LapVM*)={NULL,add,SUB,mul,div,mod,LT,EQ,GT,NOTLT,
 NOTGT,NOTEQ,NOT,OR,AND,set_var,true_jump,jmp,GOTO,RETURN,
 set_arr,set_str,POP,PUSH,PRINT,repeat,dispose,save_local_var,
 save_global_var,load_local_var,load_global_var,load_const,get_arg,shut_down,push_str};
@@ -826,9 +854,9 @@ void Run_code(LapVM *env,char* argv[]){
 		on_id=env->ins[i][0];
 		if(on_id!=0){
 			ins[on_id](env);
-		}
-		if(is_err){
-			break;
+			if(is_err){
+				break;
+			}
 		}
 	}
 }
