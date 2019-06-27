@@ -11,7 +11,7 @@
 #define MAX_LOCAL_SIZE 255
 #define MAX_GLOBAL_SIZE 4095
 #define MAX_CONST_SIZE 4095
-#define MAX_REG_NUM 255
+#define MAX_REG_NUM 254
 
 #define INNER_FUNCTION 1
 
@@ -50,7 +50,8 @@
 #define get_arg "20"
 #define shut_down "21"
 #define push_str "22"
-
+#define label "23"
+#define end_label "24"
 
 
 
@@ -97,7 +98,7 @@ class Class{
 	map<string,string> member;
 };
 
-vector<string> error_list,conv_bool,conv_int,conv_float;
+vector<string> error_list,conv_bool,conv_int,conv_float,conv_any_Basic;
 
 map<string,Class> Class_type;
 
@@ -105,13 +106,13 @@ map<string,vector<string> > convert,have_op;
 
 stringstream stream;
 
-vector<string> last_func_name,last_func_type;
+vector<string> last_func_name,last_func_type,out_ins;
 
-int digui=0,ceng=-1,const_count=0,reg_max,var_count=0;
+int digui=0,ceng=-1,const_count=0,reg_max,var_count=0,label_count=0;
 
 bool last_func=false,inner_call=false,inner_list=false;
 
-string out="lapl00000000",out_ins;
+string out="lapl00000000";
 
 class Token{
 public:
@@ -119,14 +120,14 @@ public:
 	int line,byte,const_id,small_count;
 	vector<Token> sub;
 	bool is_return;
-	Token(string type,string value,int Line,int b,vector<Token> Sub=vector<Token>(),bool is=false,int small=0){
+	Token(string type,string value,int Line,int b,vector<Token> Sub=vector<Token>(),bool is=false,int small=0,int id=0){
 		Type=type;
 		Value=value;
 		line=Line;
 		byte=b;
 		sub=Sub;
 		is_return=is;
-		const_id=0;
+		const_id=id;
 		small_count=small;
 	}
 	Token(){
@@ -166,17 +167,18 @@ public:
 class data{
 public:
 	string type;
-	int argc,id;
+	int argc,id,ins;
 	vector<var> args;
 	vector<Token> init;
 	vector<int> arr_len;
-	data(string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0){
+	data(string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0,int INS=0){
 		type=t;
 		argc=c;
 		args=arg;
 		init=i;
 		arr_len=len;
 		id=ID;
+		ins=INS;
 	}
 	data(){
 		argc=-1;
@@ -185,6 +187,7 @@ public:
 		init=vector<Token>();
 		id=0;
 		arr_len=vector<int>();
+		ins=0;
 	}
 };
 
@@ -684,7 +687,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 					error_list.push_back("错误："+Position(op2.line,op2.byte)+" 类型'"+op2.Type+"'无法转换为'bool'类型进行非运算");
 					break;
 				}
-				out_ins+=Encode_ins(NOT,stack.size(),0,0);
+				out_ins.push_back(Encode_ins(NOT,stack.size(),0,0));
 				type1="bool";
 			}
 			else{
@@ -734,10 +737,10 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 							break;
 						}
 						if(is_global1){
-							out_ins+=Encode_ins(save_global_var,id1,0,0);
+							out_ins.push_back(Encode_ins(save_global_var,id1,0,0));
 						}
 						else{
-							out_ins+=Encode_ins(save_local_var,id1,0,0);
+							out_ins.push_back(Encode_ins(save_local_var,id1,0,0));
 						}
 					}
 				}
@@ -757,7 +760,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 						op=Logic_ins[index];
 					}
 					id1=stack.size();
-					out_ins+=Encode_ins(op,id1,id1+1,0);
+					out_ins.push_back(Encode_ins(op,id1,id1+1,0));
 				}
 			}
 			if(stack.size()>MAX_EXP_STACK_LENGTH){
@@ -800,7 +803,16 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 			inner_call=false;
 			stack.push_back(Token(on_data.type,"",token.line,token.byte,vector<Token>()));
 			if(token.Value=="print"){
-				out_ins+=Encode_ins(PRINT,0,0,0);
+				out_ins.push_back(Encode_ins(PRINT,0,0,0));
+			}
+			else{
+				op=Tostring(iter->second.ins);
+				map<string,Token>::iterator iter_s=const_list.find(op);
+				if(iter_s==const_list.end()){
+					const_list.insert(pair<string,Token>(op,Token("int",op,0,0,vector<Token>(),false,0,const_count)));
+				}
+				out_ins.push_back(Encode_ins(load_const,const_count++,stack.size(),0));
+				out_ins.push_back(Encode_ins(GOTO,iter->second.argc,stack.size()-1,0));
 			}
 		}
 		else if(token.Type=="arg"){
@@ -830,11 +842,11 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 				}
 				is1=!is1;
 				if(is_global){
-					out_ins+=Encode_ins(load_global_var,id,stack.size(),0);
+					out_ins.push_back(Encode_ins(load_global_var,id,stack.size(),0));
 					is_global=false;
 				}
 				else{
-					out_ins+=Encode_ins(load_local_var,id,stack.size(),0);
+					out_ins.push_back(Encode_ins(load_local_var,id,stack.size(),0));
 				}
 			}
 			else{
@@ -848,7 +860,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 					const_list.insert(pair<string,Token>(token.Value,token));
 					consts.push_back(token);
 				}
-				out_ins+=Encode_ins(load_const,token.const_id,stack.size(),0);
+				out_ins.push_back(Encode_ins(load_const,token.const_id,stack.size(),0));
 			}
 			stack.push_back(token);
 			reg_max=max(stack.size(),reg_max);
@@ -1012,10 +1024,10 @@ int Check_format(vector<Token> &token_list,int index,map<string,data> *domain,ve
 			args.push_back(var(type[i],name[i]));
 		}
 		if(domain==&global){
-			domain->insert(pair<string,data>(last_func_name.back(),data(last_func_type.back(),args.size(),args,vector<Token>(),vector<int>(),var_count++)));
+			domain->insert(pair<string,data>(last_func_name.back(),data(last_func_type.back(),args.size(),args,vector<Token>(),vector<int>(),var_count++,out_ins.size()-1)));
 		}
 		else{
-			domain->insert(pair<string,data>(last_func_name.back(),data(last_func_type.back(),args.size(),args,vector<Token>(),vector<int>(),(*local_count)++)));
+			domain->insert(pair<string,data>(last_func_name.back(),data(last_func_type.back(),args.size(),args,vector<Token>(),vector<int>(),(*local_count)++,out_ins.size()-1)));
 		}
 		last_func=true;
 		on_var->push_back(last_func_name.back());
@@ -1522,14 +1534,16 @@ void Compile_file(string File_name){
 		Grammar_check(token_list,&temp,&global);
 	}
 	if(error_list.empty()){
-		out+=itoh(reg_max,2)+itoh(const_list.size(),4)+itoh(global.size()-INNER_FUNCTION,4);
+		out+=itoh(reg_max+1,2)+itoh(const_list.size(),4)+itoh(global.size()-INNER_FUNCTION,4);
 		for(int i=0;i<consts.size();i++){
 			out+=Encode_const(consts[i]);
 		}
 		fclose(fp);
 		fp=fopen("a.lapc","w+");
 		fputs(out.c_str(),fp);
-		fputs(out_ins.c_str(),fp);
+		for(int i=0;i<out_ins.size();i++){
+			fputs(out_ins[i].c_str(),fp);
+		}
 		fclose(fp);
 	}
 	else{
@@ -1542,7 +1556,7 @@ void Compile_file(string File_name){
 int main(int argc,char* argv[]){
 	//string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0
 	vector<var> v=vector<var>();
-	v.push_back(var("int","v"));
+	v.push_back(var("any_Basic","v"));
 	global.insert(pair<string,data>("print",data("void",1,v,vector<Token>(),vector<int>(),0)));
 	var_count++;
 	conv_bool.push_back("int");
@@ -1553,9 +1567,15 @@ int main(int argc,char* argv[]){
 	convert["int"]=conv_int;
 	conv_float.push_back("bool");
 	conv_float.push_back("int");
+	conv_any_Basic.push_back("int");
+	conv_any_Basic.push_back("float");
+	conv_any_Basic.push_back("double");
+	conv_any_Basic.push_back("bool");
+	conv_any_Basic.push_back("string");
 	convert["float"]=conv_float;
 	convert["string"]=vector<string>();
 	convert["void"]=vector<string>();
+	convert["any_Basic"]=conv_any_Basic;
 	//{"+","-","*","/","%",">","<","==",">=","<=","!="}
 	int_op.push_back("+");
 	int_op.push_back("-");
