@@ -691,7 +691,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 				type1="bool";
 			}
 			else{
-				if(size_add==0){
+				if(stack.size()==0){
 					error_list.push_back("错误："+Position(token.line,token.byte)+" 运算符'"+op+"'缺少第二个操作值");
 					break;
 				}
@@ -723,7 +723,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 						break;
 					}
 					if(!iter->second.arr_len.empty()){
-						if(type2!="list"){
+						if(type2!="codebox"){
 							error_list.push_back("错误："+Position(op2.line,op2.byte)+" 变量'"+iter->first+"'作为静态数组赋值必须使用列表");
 							break;
 						}
@@ -769,6 +769,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 				break;
 			}
 			stack.push_back(Token(type1,"",op2.line,op2.byte,vector<Token>()));
+			size_add++;
 			is_global1=false;
 			is_global2=false;
 		}
@@ -790,6 +791,7 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 			for(int i=0;i<on_data.argc;i++){
 				trans_list=Trans_exp(token.sub[i].sub);
 				op1=Check_exp(trans_list,domain);
+				//size_add++;
 				if(!error_list.empty()){
 					break;
 				}
@@ -814,9 +816,12 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 					const_list.insert(pair<string,Token>(op,op1));
 					consts.push_back(op1);
 				}
-				out_ins.push_back(Encode_ins(load_const,op1.const_id,size_add,0));
-				out_ins.push_back(Encode_ins(GOTO,iter->second.argc,size_add,0));
+				out_ins.push_back(Encode_ins(load_const,op1.const_id,size_add-1,0));
+				out_ins.push_back(Encode_ins(GOTO,iter->second.argc,size_add-1,0));
 			}
+		}
+		else if(token.Type=="codebox"){
+			stack.push_back(Check_exp(token.sub,domain));
 		}
 		else if(token.Type=="arg"){
 			Check_exp(token.sub,domain);
@@ -824,9 +829,6 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 				break;
 			}
 			stack.push_back(Token(on_data.type,"",token.line,token.byte));
-		}
-		else if(token.Type==""){
-			
 		}
 		else{
 			if(token.Type=="var"){
@@ -854,7 +856,12 @@ Token Check_exp(vector<Token> &token_list,map<string,data> *domain){
 					is_global=false;
 				}
 				else{
-					out_ins.push_back(Encode_ins(load_local_var,id,size_add,0));
+					if(domain==&global){
+						out_ins.push_back(Encode_ins(load_local_var,id-1,size_add,0));
+					}
+					else{
+						out_ins.push_back(Encode_ins(load_local_var,id,size_add,0));
+					}
 				}
 			}
 			else{
@@ -1110,7 +1117,7 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 		local->insert(*domain->find(last_func_name.back()));
 		for(int i=0;i<last_arg->size();i++){
 			x=(*last_arg)[i];
-			local->insert(pair<string,data>(x.name,data(x.type)));
+			local->insert(pair<string,data>(x.name,data(x.type,-1,vector<var>(),vector<int>(),local_count++)));
 		}
 		delete last_arg;
 	}
@@ -1157,7 +1164,7 @@ void Grammar_check(vector<Token> &token_list,vector<string> *temp,map<string,dat
 				t=token.Value;
 				token=token_list[i];
 				is_arr=false;
-				if(token.Type=="codebox"){
+				if(token.Type=="list"){
 					if(token.sub.empty()){
 						error_list.push_back("错误："+Position(token.line,token.byte)+" 静态数组定义长度不能为空");
 						break;
@@ -1462,6 +1469,44 @@ vector<Token> Fold(vector<Token> &token_list){
 				break;
 			}
 		}
+		else if(token.Value=="["){
+			kh=1;
+			arg=new vector<Token>();
+			arg_list=new vector<Token>();
+			line=token.line;
+			byte=token.byte;
+			i++;
+			for(;i<token_list.size();i++){
+				token=token_list[i];
+				if(token.Value=="["){
+					kh++;
+				}
+				else if(token.Value=="]"){
+					kh--;
+				}
+				if(kh==0){
+					if(arg->size()>0){
+						arg_list->push_back(Token("element","",token.line,token.byte,Fold(*arg)));
+					}
+					break;
+				}
+				else if(token.Value==","&&kh==1){
+					arg_list->push_back(Token("element","",token.line,token.byte,Fold(*arg)));
+					delete arg;
+					arg=new vector<Token>();
+				}
+				else{
+					arg->push_back(token);
+				}
+			}
+			if(kh>0){
+				error_list.push_back("错误："+Position(line,byte)+" 列表定义缺少']'");
+				break;
+			}
+			temp.push_back(Token("list","",line,byte,*arg_list));
+			delete arg_list;
+			delete arg;
+		}
 		else if(token.Value=="{"){
 			arg=new vector<Token>();
 			kh=1;
@@ -1549,7 +1594,7 @@ int main(int argc,char* argv[]){
 	if(argc>1){
 		string on=string(argv[1]);
 		if(on=="-h"){
-			printf("Lapc by hacklinjiuyue v0.73a\n--------------------\n  lapc -h for help\n  lapc x.lap to compile the file\n--------------------\n");
+			printf("Lapc by hacklinjiuyue v0.74a\n--------------------\n  lapc -h for help\n  lapc x.lap to compile the file\n--------------------\n");
 		}
 		else{
 			//string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0
