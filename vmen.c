@@ -7,6 +7,7 @@
 #define ERR_FILE_NOT_FIT "error:This file can not run on the lap platform!\n"
 #define ERR_OUT_OF_MEM "error:Out of memory!\n"
 #define ERR_DIV_ZERO "error:Div 0!\n"
+#define ERR_INIT_VM_FAIL "error:VM Initialize failed!\n"
 
 #define MAX_STACK_SIZE 20
 #define MAX_CALL_STACK_DEPTH 256
@@ -31,8 +32,9 @@ typedef struct{
 }Pool;
 
 typedef struct{
-	int pc,*pc_stack,pool_size,const_size,pool_stack_size,*global_pool_type,*stack_type,*const_type,ins_max,stack_size,on_stack,reg_size;
-	void **global_pool,**stack,**const_pool;
+	int pc,*pc_stack,*reg_id_stack,const_size,
+	pool_stack_size,*stack_type,*const_type,ins_max,stack_size,on_stack,reg_size;
+	void **stack,**const_pool;
 	Pool **pool_stack;
 	char** ins;
 }LapVM;
@@ -269,14 +271,14 @@ void* Parse_data(FILE *fp,char onget){
 void free_Pool(Pool **pool){
 	Pool *on=*pool;
 	for(int i=0;i<on->reg_size;i++){
-		if(on->regs[i]!=NULL){
+		if(on->regs[i]!=NULL&&!on->reg_is_ref[i]){
 			free_data(&on->regs[i],on->reg_type[i]);
 		}
 	}
 	free(on->regs);
-	free(on->reg_type);
+	//free(on->reg_type);
 	for(int i=0;i<on->pool_size;i++){
-		if(on->local_pool[i]!=NULL){
+		if(on->local_pool[i]!=NULL&&!on->pool_is_ref[i]){
 			free_data(&on->local_pool[i],on->pool_type[i]);
 		}
 	}
@@ -289,38 +291,20 @@ void free_Pool(Pool **pool){
 
 void free_VM(LapVM **vm){
 	LapVM *on=*vm;
-	for(int i=0;i<on->pool_stack_size;i++){
-		free_Pool(&on->pool_stack[i]);
-	}
+	//free(on->pool_stack[0]->reg_type);
+	free_Pool(&on->pool_stack[0]);
 	free(on->pool_stack);
-	if(on->ins!=NULL){
-		for(int i=0;i<on->ins_max;i++){
-			free(on->ins[i]);
-		}
-		free(on->ins);
+	for(int i=0;i<on->ins_max;i++){
+		free(on->ins[i]);
 	}
+	free(on->ins);
 	for(int i=0;i<on->const_size;i++){
-		free_data(&on->const_pool[i],on->const_type[i]);
+		if(on->const_pool[i]!=NULL){
+			free_data(&on->const_pool[i],on->const_type[i]);			
+		}
 	}
 	free(on->const_type);
 	free(on->const_pool);
-	if(on->stack!=NULL){
-		for(int i=0;i<on->stack_size;i++){
-			if(on->stack[i]!=NULL){
-				free_data(&on->stack[i],on->stack_type[i]);
-			}
-		}
-		free(on->stack);
-		free(on->stack_type);
-		free(on->pc_stack);
-	}
-	for(int i=0;i<on->pool_size;i++){
-		if(on->global_pool[i]!=NULL){
-			free_data(&on->global_pool[i],on->global_pool_type[i]);
-		}
-	}
-	free(on->global_pool);
-	free(on->global_pool_type);
 	free(on);
 }
 
@@ -462,13 +446,7 @@ LapVM* Initialize_VM(char path[]){
 	}
 	LapVM *temp=(LapVM*)malloc(sizeof(LapVM));
 	temp->pc=0;
-	temp->global_pool=(void**)malloc(sizeof(void*[global]));
-	for(int i=0;i<global;i++){
-		temp->global_pool[i]=NULL;
-	}
-	temp->global_pool_type=(int*)malloc(sizeof(int[global]));
 	temp->ins_max=pc;
-	temp->pool_size=global;
 	temp->pool_stack_size=1;
 	temp->const_size=pool;
 	temp->ins=ins;
@@ -480,8 +458,7 @@ LapVM* Initialize_VM(char path[]){
 	temp->pool_stack=(Pool**)malloc(sizeof(Pool*[1]));
 	temp->pool_stack[0]=Initialize_Pool(0,reg);
 	temp->pool_stack[0]->pool_size=global;
-	temp->pool_stack[0]->pool_type=temp->global_pool_type;
-	temp->pool_stack[0]->local_pool=temp->global_pool;
+	temp->reg_id_stack=NULL;
 	temp->on_stack=0;
 	temp->reg_size=reg;
 	return temp;
@@ -514,6 +491,7 @@ void add (LapVM* env){
 		*(double*)pool->regs[op1]+=*(double*)pool->regs[op2];
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
+	pool->reg_is_ref[op2]=1;
 }
 void SUB (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -530,6 +508,7 @@ void SUB (LapVM* env){
 		*(double*)pool->regs[op1]-=*(double*)pool->regs[op2];
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
+	pool->reg_is_ref[op2]=1;
 }
 void mul (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -546,6 +525,7 @@ void mul (LapVM* env){
 		*(double*)pool->regs[op1]*=*(double*)pool->regs[op2];
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
+	pool->reg_is_ref[op2]=1;
 }
 void div (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -577,6 +557,7 @@ void div (LapVM* env){
 		*(double*)pool->regs[op1]/=*(double*)pool->regs[op2];
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
+	pool->reg_is_ref[op2]=1;
 }
 void mod (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -614,6 +595,7 @@ void mod (LapVM* env){
 		*(double*)pool->regs[op1]=d1-(int)(d1/d2)*d2;
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
+	pool->reg_is_ref[op2]=1;
 }
 void LT (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -631,6 +613,7 @@ void LT (LapVM* env){
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
 	pool->reg_type[op1]=4;
+	pool->reg_is_ref[op2]=1;
 }
 void EQ (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -648,6 +631,7 @@ void EQ (LapVM* env){
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
 	pool->reg_type[op1]=4;
+	pool->reg_is_ref[op2]=1;
 }
 void GT (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -665,6 +649,7 @@ void GT (LapVM* env){
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
 	pool->reg_type[op1]=4;
+	pool->reg_is_ref[op2]=1;
 }
 void NOT (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -710,6 +695,7 @@ void OR (LapVM* env){
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
 	pool->reg_type[op1]=4;
+	pool->reg_is_ref[op2]=1;
 }
 void AND (LapVM* env){
 	char* on_ins=env->ins[env->pc];
@@ -727,6 +713,7 @@ void AND (LapVM* env){
 	}
 	free_data(&pool->regs[op2],pool->reg_type[op2]);
 	pool->reg_type[op1]=4;
+	pool->reg_is_ref[op2]=1;
 }
 void set_var (LapVM* env){
 	
@@ -735,13 +722,14 @@ void true_jump (LapVM* env){
 	
 }
 void jmp (LapVM* env){
-	
+	env->pc=*(int*)env->const_pool[env->ins[env->pc][1]];
 }
 void GOTO (LapVM* env){//参数个数 寄存器末尾id(+1为常量索引) 最大255个局部量
 	char* ins=env->ins[env->pc];
-	int *on=NULL,max=ins[1],arg_count=0,reg=ins[2];
+	int *on=NULL,max=ins[1],reg=ins[2];
 	env->stack=(void**)malloc(sizeof(void*[max-1]));
 	env->stack_type=(int*)malloc(sizeof(int[max-1]));
+	env->reg_id_stack=(int*)realloc(env->reg_id_stack,sizeof(int[max-1]));
 	on=(int*)realloc(env->pc_stack,sizeof(int[max--]));
 	if(on==NULL){
 		is_err=1;
@@ -750,25 +738,33 @@ void GOTO (LapVM* env){//参数个数 寄存器末尾id(+1为常量索引) 最�
 	}
 	env->pc_stack=on;
 	Pool* pool=env->pool_stack[env->on_stack];
-	for(int i=max;i>-1;i--){
-		env->stack[arg_count]=pool->regs[reg];
-		env->stack_type[arg_count]=pool->reg_type[reg--];
-		arg_count++;
+	env->pc_stack[env->on_stack]=env->pc;
+	env->pc=*(int*)(pool->regs[reg]);
+	free_data(&pool->regs[reg--],0);
+	for(int i=max;i>-1;i--){//检查编译器的bug
+		env->stack[i]=pool->regs[reg];
+		env->stack_type[i]=pool->reg_type[reg--];
 	}
-	env->pc_stack[env->on_stack]=env->pc;//比其他栈-1
-	env->pc=(int)(pool->regs[reg+1]);
-	env->on_stack++;
+	env->reg_id_stack[env->on_stack++]=reg;
 	env->pool_stack[env->on_stack]=Initialize_Pool(255,env->reg_size);
 	pool=env->pool_stack[env->on_stack];
 	max++;
 	for(int i=0;i<max;i++){
 		set_var_mem(&pool->local_pool[i],env->stack[i],env->stack_type[i]);
+		pool->pool_type[i]=env->stack_type[i];
 	}
 	free(env->stack);
 	free(env->stack_type);
 }
 void RETURN (LapVM* env){
-	
+	env->pc=env->pc_stack[env->on_stack-1];
+	Pool *pool1=env->pool_stack[env->on_stack-1],*pool2=env->pool_stack[env->on_stack--];
+	int id=env->reg_id_stack[env->on_stack]+1;
+	pool1->regs[id]=pool2->regs[0],pool1->reg_type[id]=pool2->reg_type[0];
+	pool2->reg_is_ref[0]=1;
+	free_Pool(&pool2);
+	free(pool2->reg_type);
+	free(pool2);
 }
 void set_arr (LapVM* env){
 	
@@ -814,7 +810,20 @@ void save_global_var (LapVM* env){
 	
 }
 void load_local_var (LapVM* env){
-	
+	char* on_ins=env->ins[env->pc];
+	int index=on_ins[1],to=on_ins[2];
+	Pool *pool=env->pool_stack[env->on_stack];
+	char type=pool->pool_type[index];
+	if(type<5){
+		if(pool->regs[to]!=NULL&&!pool->reg_is_ref[to]){
+			free_data(&pool->regs[to],pool->reg_type[to]);
+		}
+		set_var_mem(&pool->regs[to],pool->local_pool[index],type);
+	}
+	else{
+		pool->regs[to]=pool->local_pool[index];
+	}
+	pool->reg_type[to]=type;
 }
 void load_global_var (LapVM* env){
 	
@@ -824,13 +833,16 @@ void load_const (LapVM* env){//索引 寄存器
 	int index=on_ins[1],to=on_ins[2];
 	char type=env->const_type[index];
 	Pool *pool=env->pool_stack[env->on_stack];
-	if(type!=5){
+	if(type<5){
 		if(pool->regs[to]!=NULL&&!pool->reg_is_ref[to]){
 			free_data(&pool->regs[to],pool->reg_type[to]);
 		}
 		set_var_mem(&pool->regs[to],env->const_pool[index],type);
-		pool->reg_type[to]=type;
 	}
+	else{
+		pool->regs[to]=env->const_pool[index];
+	}
+	pool->reg_type[to]=type;
 }
 void get_arg (LapVM* env){
 	
@@ -849,14 +861,17 @@ save_global_var,load_local_var,load_global_var,load_const,get_arg,shut_down,push
 
 void Run_code(LapVM *env,char* argv[]){
 	char on_id;
-	for(int i=0;i<env->ins_max;i++){
+	int max=env->ins_max;
+	for(int i=0;i<max;i++){
 		env->pc=i;
 		on_id=env->ins[i][0];
+		//printf("ins %d\n",on_id);
 		if(on_id!=0){
 			ins[on_id](env);
 			if(is_err){
 				break;
 			}
+			i=env->pc;
 		}
 	}
 }
@@ -866,6 +881,9 @@ int main(int argc,char* argv[]){
 	if(env!=NULL){
 		Run_code(env,argv);
 		free_VM(&env);
+	}
+	else{
+		printf(ERR_INIT_VM_FAIL);
 	}
 	system("pause");
 }
