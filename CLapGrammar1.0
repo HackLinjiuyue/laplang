@@ -1,0 +1,17 @@
+func name length arg arg arg...
+
+endfunc
+
+when xxx
+
+do
+
+if xxx
+
+endif
+
+return
+
+break
+
+print xxx
