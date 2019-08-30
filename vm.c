@@ -49,7 +49,7 @@ LapObject *CreateObject(int type,int size,void* value){
 		temp->Value=malloc(sizeof(double));
 		case 2:
 		temp->Value=malloc(sizeof(char[size+4]));
-		memset(temp->Value,0,sizeof(char[size]));
+		memset(temp->Value,0,sizeof(char[size+4]));
 		break;
 		case 3:
 		temp->Value=malloc(sizeof(int));
@@ -80,6 +80,7 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 	break;
 	case 3:
 	*(int*)temp->Value=*(int*)obj->Value;
+	break;
 	case 4:
 	for(;i<size;i++){
 		temp->Property[i]=CreateObjectFromObject(obj->Property[i]);
@@ -443,7 +444,7 @@ void Calculate(LapState *env,int sign){
 	char* onstr=NULL;
 	LapObject *temp=op1;
 	double d1,d2;
-	int *onbool=NULL;
+	int *onbool=NULL,n;
 	switch(sign){
 		case '+':
 		switch(type){
@@ -553,6 +554,24 @@ void Calculate(LapState *env,int sign){
 		}
 		temp->Type=3;
 		break;
+		case 'i':
+		n=*(int*)op2->Value;
+		if(n>=op1->Size){
+			env->Err=2;
+			break;
+		}
+		switch(type){
+		case 2:
+			temp=CreateObject(2,1,NULL);
+			((char*)temp->Value)[0]=((char*)op1->Value)[n];
+			DeleteObject(op1);
+			break;
+		case 4:
+			temp=CreateObjectFromObject(op1->Property[n]);
+			DeleteObject(op1);
+			break;
+		}
+		break;
 	}
 	DeleteObject(op2);
 	env->Stack[env->Index]=temp;
@@ -592,7 +611,7 @@ void GetCommandArg(LapState *env){
 		env->MaxIndex+=20;
 		env->Stack=(LapObject**)realloc(env->Stack,sizeof(LapObject*[env->MaxIndex]));
     }
-    env->Stack[env->Index]=CreateObjectFromObject(args->Property[*i]);
+    env->Stack[env->Index]=CreateObjectFromObject(args);
     env->Index++;
     free(i);
 }
@@ -750,6 +769,9 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(InsCmp(ins[0],"mod")){
 		Calculate(env,'%');
     }
+    else if(InsCmp(ins[0],"index")){
+		Calculate(env,'i');
+    }
     else if(InsCmp(ins[0],"bigger")){
 		Calculate(env,'>');
     }
@@ -776,7 +798,7 @@ void DoIns(LapState *env){//use ' ' to separate parms
 		env->PC=*line-2;
 		free(line);
     }
-    else if(InsCmp(ins[0],"get_command_arg")){//1 int for array index
+    else if(InsCmp(ins[0],"get_command_arg")){
 		GetCommandArg(env);
     }
     else if(InsCmp(ins[0],"store_var_local")){//1 int for var index
