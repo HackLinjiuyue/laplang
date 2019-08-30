@@ -576,8 +576,10 @@ void Calculate(LapState *env,int sign){
 		}
 		switch(type){
 		case 2:
-			temp=CreateObject(2,1,NULL);
-			((char*)temp->Value)[0]=((char*)op1->Value)[n];
+			onstr=(char*)malloc(sizeof(char[2]));
+			onstr[0]=((char*)op1->Value)[n];
+			onstr[1]=0;
+			temp=CreateObject(2,1,onstr);
 			DeleteObject(op1);
 			break;
 		case 4:
