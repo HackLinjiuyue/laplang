@@ -710,7 +710,7 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(InsCmp(ins[0],"push_const")){//1 int for const id
 		PushConst(env);
     }
-    else if(InsCmp(ins[0],"push_var_local")){//1 int for const id
+    else if(InsCmp(ins[0],"push_var_local")){//1 int for var id
 		PushVar(env,'l');
     }
     else if(InsCmp(ins[0],"add")){
@@ -763,7 +763,7 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(InsCmp(ins[0],"goto")){//1 int for line  1 int for parm num
 		Goto(env);
     }
-    else if(InsCmp(ins[0],"return")){//1 int for line  1 int for parm num
+    else if(InsCmp(ins[0],"return")){
 		Return(env);
     }
     else{//小于0虚拟机问题 大于0编程问题
