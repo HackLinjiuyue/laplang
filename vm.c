@@ -47,12 +47,14 @@ LapObject *CreateObject(int type,int size,void* value){
 		break;
 		case 1:
 		temp->Value=malloc(sizeof(double));
+		break;
 		case 2:
 		temp->Value=malloc(sizeof(char[size+4]));
 		memset(temp->Value,0,sizeof(char[size+4]));
 		break;
 		case 3:
 		temp->Value=malloc(sizeof(int));
+		break;
 		case 4:
 		temp->Property=(LapObject**)malloc(sizeof(LapObject*[size]));
 		break;
@@ -103,6 +105,7 @@ int StrLen(char* str){
 char** SplitIns(char* str){
 	int len=StrLen(str)-1;
     char** temp=(char**)malloc(sizeof(char*[3])),*onstr=(char*)malloc(sizeof(char[20]));
+    memset(onstr,0,sizeof(char[20]));
     int i=0,index=0,k=0,max=20;
     for(;i<len;i++){
 		if(str[i]==' '){
@@ -120,6 +123,7 @@ char** SplitIns(char* str){
 			if(index==max){
 				max+=20;
 				onstr=(char*)realloc(onstr,sizeof(char[max]));
+				memset(onstr+max-20,0,20);
 			}
 			onstr[index]=str[i];
 			index++;
@@ -287,17 +291,6 @@ int StringCmp(const char* str1,const char* str2){
 	return temp;
 }
 
-int InsCmp(const char* str1,const char* str2){
-	int i=0,temp=1,max=StrLen(str2);
-	for(;i<max;i++){
-		if(str1[i]!=str2[i]){
-			temp=0;
-			break;
-		}
-	}
-	return temp;
-}
-
 int* ParseInt(const char* str){
     int max=StrLen(str);
     int i=0,sign=1;
@@ -381,6 +374,7 @@ void AddConst(LapState *env,char type){
 		env->ConstVars=(LapObject**)realloc(env->ConstVars,sizeof(LapObject*[env->MaxConst]));
 	}
 	char *temp=NULL;
+	LapObject *obj=NULL;
 	switch(type){
 	case 0:
 		env->ConstVars[env->ConstNum]=CreateObject(0,0,ParseInt(env->Commands[env->PC][1]));
@@ -393,6 +387,11 @@ void AddConst(LapState *env,char type){
 		env->ConstVars[env->ConstNum]=CreateObject(2,StrLen(temp),temp);
 	break;
 	case 3:
+		obj=CreateObject(3,0,NULL);
+		if(StringCmp(env->Commands[env->PC][1],"false")){
+			*(int*)obj->Value=0;
+		}
+		env->ConstVars[env->ConstNum]=obj;
 	break;
 	}
 	env->ConstNum++;
@@ -547,9 +546,12 @@ void Calculate(LapState *env,int sign){
 			break;
 		case 2:
 			onbool=malloc(sizeof(int));
-			*onbool=InsCmp((char*)op1->Value,(char*)op2->Value);
+			*onbool=StringCmp((char*)op1->Value,(char*)op2->Value);
 			DeleteObject(op1);
 			temp=CreateObject(3,0,onbool);
+			break;
+		case 3:
+			(*(int*)op1->Value)=*(int*)op1->Value==*(int*)op2->Value;
 			break;
 		}
 		temp->Type=3;
@@ -571,6 +573,12 @@ void Calculate(LapState *env,int sign){
 			DeleteObject(op1);
 			break;
 		}
+		break;
+		case 'a':
+			(*(int*)op1->Value)=*(int*)op1->Value&&*(int*)op2->Value;
+		break;
+		case 'o':
+			(*(int*)op1->Value)=*(int*)op1->Value||*(int*)op2->Value;
 		break;
 	}
 	DeleteObject(op2);
@@ -733,85 +741,105 @@ void Return(LapState *env){
     free(var);
 }
 
+void Asc(LapState *env){
+	LapObject *obj=env->Stack[env->Index-1];
+	int *x=malloc(sizeof(int));
+	*x=((char*)obj->Value)[0];
+	DeleteObject(obj);
+	env->Stack[env->Index-1]=CreateObject(0,0,x);
+}
+
 void DoIns(LapState *env){//use ' ' to separate parms
 	char** ins=env->Commands[env->PC];
 	//printf("%s\n",ins[0]);
-    if(InsCmp(ins[0],"add_const_int")){//1 str for int
+    if(StringCmp(ins[0],"add_const_int")){//1 str for int
         AddConst(env,0);
     }
-    else if(InsCmp(ins[0],"add_const_float")){//1 str for double
+    else if(StringCmp(ins[0],"add_const_float")){//1 str for double
         AddConst(env,1);
     }
-    else if(InsCmp(ins[0],"add_const_str")){//1 str no"" \b->' ' \n->'\n'
+    else if(StringCmp(ins[0],"add_const_str")){//1 str no"" \b->' ' \n->'\n'
         AddConst(env,2);
     }
-    else if(InsCmp(ins[0],"push_const")){//1 int for const id
+    else if(StringCmp(ins[0],"add_const_bool")){//1 true/false
+        AddConst(env,3);
+    }
+    else if(StringCmp(ins[0],"push_const")){//1 int for const id
 		PushConst(env);
     }
-    else if(InsCmp(ins[0],"push_var_local")){//1 int for var id
+    else if(StringCmp(ins[0],"push_var_local")){//1 int for var id
 		PushVar(env,'l');
     }
-    else if(InsCmp(ins[0],"push_var_global")){//1 int for var id
+    else if(StringCmp(ins[0],"push_var_global")){//1 int for var id
 		PushVar(env,'g');
     }
-    else if(InsCmp(ins[0],"add")){
+    else if(StringCmp(ins[0],"add")){
 		Calculate(env,'+');
     }
-    else if(InsCmp(ins[0],"sub")){
+    else if(StringCmp(ins[0],"sub")){
 		Calculate(env,'-');
     }
-    else if(InsCmp(ins[0],"mul")){
+    else if(StringCmp(ins[0],"mul")){
 		Calculate(env,'*');
     }
-    else if(InsCmp(ins[0],"div")){
+    else if(StringCmp(ins[0],"div")){
 		Calculate(env,'/');
     }
-    else if(InsCmp(ins[0],"mod")){
+    else if(StringCmp(ins[0],"mod")){
 		Calculate(env,'%');
     }
-    else if(InsCmp(ins[0],"index")){
+    else if(StringCmp(ins[0],"index")){
 		Calculate(env,'i');
     }
-    else if(InsCmp(ins[0],"bigger")){
+    else if(StringCmp(ins[0],"bigger")){
 		Calculate(env,'>');
     }
-    else if(InsCmp(ins[0],"smaller")){
+    else if(StringCmp(ins[0],"smaller")){
 		Calculate(env,'<');
     }
-    else if(InsCmp(ins[0],"equal")){
+    else if(StringCmp(ins[0],"equal")){
 		Calculate(env,'=');
     }
-    else if(InsCmp(ins[0],"not")){
+    else if(StringCmp(ins[0],"and")){
+		Calculate(env,'a');
+    }
+    else if(StringCmp(ins[0],"or")){
+		Calculate(env,'o');
+    }
+    else if(StringCmp(ins[0],"not")){
 		Not(env);
     }
-    else if(InsCmp(ins[0],"print")){
+    else if(StringCmp(ins[0],"print")){
 		Print(env);
     }
-    else if(InsCmp(ins[0],"true_jump")){//1 int for line
+    else if(StringCmp(ins[0],"true_jump")){//1 int for line
 		Jump(env,1);
     }
-    else if(InsCmp(ins[0],"false_jump")){//1 int for line
+    else if(StringCmp(ins[0],"false_jump")){//1 int for line
 		Jump(env,0);
     }
-    else if(InsCmp(ins[0],"jump")){//1 int for line
+    else if(StringCmp(ins[0],"jump")){//1 int for line
 		int *line=ParseInt(ins[1]);
 		env->PC=*line-2;
 		free(line);
     }
-    else if(InsCmp(ins[0],"get_command_arg")){
+    else if(StringCmp(ins[0],"get_command_arg")){
 		GetCommandArg(env);
     }
-    else if(InsCmp(ins[0],"store_var_local")){//1 int for var index
+    else if(StringCmp(ins[0],"store_var_local")){//1 int for var index
 		StoreVar(env,'l');
     }
-    else if(InsCmp(ins[0],"store_var_global")){//1 int for var index
+    else if(StringCmp(ins[0],"store_var_global")){//1 int for var index
 		StoreVar(env,'g');
     }
-    else if(InsCmp(ins[0],"goto")){//1 int for line  1 int for parm num
+    else if(StringCmp(ins[0],"goto")){//1 int for line  1 int for parm num
 		Goto(env);
     }
-    else if(InsCmp(ins[0],"return")){
+    else if(StringCmp(ins[0],"return")){
 		Return(env);
+    }
+    else if(StringCmp(ins[0],"asc")){
+		Asc(env);
     }
     else{//小于0虚拟机问题 大于0编程问题
 		env->Err=-1;
