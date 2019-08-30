@@ -2,6 +2,9 @@
 #include<stdlib.h>
 #include<string.h>
 
+#define MAX_STACK 256
+#define MAX_ARG_NUM 10
+
 typedef struct LapObject{
 	struct LapObject** Property;
 	void *Value;
@@ -14,7 +17,7 @@ typedef struct{
 	LapObject** Stack;
 	LapObject** ConstVars;
 	char*** Commands;
-	int Index,ConstNum,*VarNum,MaxConst,*MaxVar,MaxIndex,PC,*PCStack,MaxPC,TruePC,Err,StackPC;
+	int Index,ConstNum,*VarNum,MaxConst,*MaxVar,MaxIndex,PC,*PCStack,MaxPC,TruePC,Err,StackPC,MaxStackPC;
 }LapState;
 
 long long QuickPower(long long x,long long y)
@@ -136,17 +139,18 @@ LapState *InitVM(char* path){
 	LapState *temp=(LapState*)malloc(sizeof(LapState));
 	temp->Stack=(LapObject**)malloc(sizeof(LapObject*[20]));
 	temp->ConstVars=(LapObject**)malloc(sizeof(LapObject*[20]));
-    temp->VarStacks=(LapObject***)malloc(sizeof(LapObject**[4]));
+    temp->VarStacks=(LapObject***)malloc(sizeof(LapObject**[8]));
     temp->VarStacks[0]=(LapObject**)malloc(sizeof(LapObject*[20]));
-    temp->MaxVar=(int*)malloc(sizeof(int[4]));
-    temp->VarNum=(int*)malloc(sizeof(int[4]));
+    temp->MaxVar=(int*)malloc(sizeof(int[8]));
+    temp->VarNum=(int*)malloc(sizeof(int[8]));
     temp->VarNum[0]=0;
     temp->MaxVar[0]=0;
-    temp->PCStack=(int*)malloc(sizeof(int[4]));
+    temp->PCStack=(int*)malloc(sizeof(int[8]));
     temp->Commands=(char***)malloc(sizeof(char**[20]));
     temp->StackPC=0;
+    temp->MaxStackPC=8;
     int i=0;
-    for(;i<4;i++){
+    for(;i<8;i++){
 		temp->VarStacks[i]=(LapObject**)malloc(sizeof(LapObject*[20]));
 		temp->MaxVar[i]=20;
 		temp->VarNum[i]=0;
@@ -424,6 +428,7 @@ void PushVar(LapState *env,int sign){
 void Pop(LapState *env){
 	env->Index--;
 	DeleteObject(env->Stack[env->Index]);
+	env->Stack[env->Index]=NULL;
 }
 
 void Calculate(LapState *env,int sign){
@@ -549,12 +554,28 @@ void Calculate(LapState *env,int sign){
 	DeleteObject(op2);
 	env->Stack[env->Index]=temp;
 	env->Index++;
+	env->Stack[env->Index]=NULL;
+}
+
+void Not(LapState *env){
+	LapObject *op1=env->Stack[env->Index-1];
+	int type=op1->Type;
+	switch(type){
+	case 0:
+		*(int*)op1->Value=!*(int*)op1->Value;
+		break;
+	case 1:
+		*(double*)op1->Value=!*(double*)op1->Value;
+		break;
+	}
+	op1->Type=3;
 }
 
 void Print(LapState *env){
 	env->Index--;
     PrintData(env->Stack[env->Index]);
     DeleteObject(env->Stack[env->Index]);
+    env->Stack[env->Index]=NULL;
 }
 
 void GetCommandArg(LapState *env){
@@ -590,6 +611,7 @@ void StoreVar(LapState *env,int sign){
     }
     env->Index--;
     DeleteObject(env->Stack[0]);
+    env->Stack[0]=NULL;
     free(i);
 }
 
@@ -611,10 +633,71 @@ void Jump(LapState *env,int sign){
 	}
 	env->Index--;
 	DeleteObject(env->Stack[0]);
+	env->Stack[0]=NULL;
+}
+
+void Goto(LapState *env){
+	char** ins=env->Commands[env->PC];
+	int *line=ParseInt(ins[2]);
+	int n=*line,v=0;
+	free(line);
+	if(n>MAX_ARG_NUM){
+		env->Err=3;
+		return;
+	}
+	env->PCStack[env->StackPC]=env->PC;
+	env->StackPC++;
+	if(env->StackPC>MAX_STACK){
+		env->Err=4;
+		return;
+	}
+	if(env->StackPC==env->MaxStackPC){
+		int i=env->MaxStackPC;
+		env->MaxStackPC+=8;
+		int max=i+8;
+		env->VarNum=(int*)realloc(env->VarNum,sizeof(int[max]));
+		env->VarStacks=(LapObject***)realloc(env->VarStacks,sizeof(LapObject**[max]));
+		env->MaxVar=(int*)realloc(env->MaxVar,sizeof(int[max]));
+		env->PCStack=(int*)realloc(env->PCStack,sizeof(int[max]));
+		for(;i<max;i++){
+			env->VarNum[i]=0;
+			env->MaxVar[i]=20;
+		}
+	}
+	env->VarStacks[env->StackPC]=(LapObject**)malloc(sizeof(LapObject*[20]));
+	LapObject** var=env->VarStacks[env->StackPC];
+	for(;v<20;v++){
+		var[v]=NULL;
+	}
+	v=0;
+	line=ParseInt(ins[1]);
+	env->PC=*line-2;
+	free(line);
+    for(;v<n;v++){
+		env->Index--;
+		var[n-v-1]=CreateObjectFromObject(env->Stack[env->Index]);
+		DeleteObject(env->Stack[env->Index]);
+		env->Stack[env->Index]=NULL;
+    }
+}
+
+void Return(LapState *env){
+	env->StackPC--;
+	int PC=env->StackPC;
+	env->PC=env->PCStack[PC];
+	int i=0,max=env->MaxVar[PC];
+	LapObject **var=env->VarStacks[PC];
+	for(;i<max;i++){
+		if(var[i]!=NULL){
+			DeleteObject(var[i]);
+		}
+	}
+    free(var);
 }
 
 void DoIns(LapState *env){//use ' ' to separate parms
 	char** ins=env->Commands[env->PC];
+	//printf("%s\n",ins[0]);
     if(InsCmp(ins[0],"add_const_int")){//1 str for int
         AddConst(env,0);
     }
@@ -654,20 +737,34 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(InsCmp(ins[0],"equal")){
 		Calculate(env,'=');
     }
+    else if(InsCmp(ins[0],"not")){
+		Not(env);
+    }
     else if(InsCmp(ins[0],"print")){
 		Print(env);
     }
-    else if(InsCmp(ins[0],"true_jump")){
+    else if(InsCmp(ins[0],"true_jump")){//1 int for line
 		Jump(env,1);
     }
-    else if(InsCmp(ins[0],"false_jump")){
+    else if(InsCmp(ins[0],"false_jump")){//1 int for line
 		Jump(env,0);
+    }
+    else if(InsCmp(ins[0],"jump")){//1 int for line
+		int *line=ParseInt(ins[1]);
+		env->PC=*line-2;
+		free(line);
     }
     else if(InsCmp(ins[0],"get_command_arg")){//1 int for array index
 		GetCommandArg(env);
     }
     else if(InsCmp(ins[0],"store_var_local")){//1 int for var index
 		StoreVar(env,'l');
+    }
+    else if(InsCmp(ins[0],"goto")){//1 int for line  1 int for parm num
+		Goto(env);
+    }
+    else if(InsCmp(ins[0],"return")){//1 int for line  1 int for parm num
+		Return(env);
     }
     else{//小于0虚拟机问题 大于0编程问题
 		env->Err=-1;
@@ -709,6 +806,12 @@ int main(int argc,char* argv[]){
 			break;
 		case 2:
 			printf("Err:Index out of range!\n");
+			break;
+		case 3:
+			printf("Err:Too many parms are given!\n");
+			break;
+		case 4:
+			printf("Err:Stack Overflow Max:%d\n",MAX_STACK);
 			break;
 		}
 	}
