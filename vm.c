@@ -120,7 +120,7 @@ char** SplitIns(char* str){
 		temp[k]=onstr;
     }
     return temp;
-}//无参数指令请带上双空格
+}
 
 LapState *InitVM(char* path){
 	FILE *fp=fopen(path,"r+");
@@ -515,16 +515,16 @@ void GetCommandArg(LapState *env){
 
 void DoIns(LapState *env){
 	char** ins=env->Commands[env->PC];
-    if(InsCmp(ins[0],"add_const_int")){
+    if(InsCmp(ins[0],"add_const_int")){//1 str for int
         AddConst(env,0);
     }
-    if(InsCmp(ins[0],"add_const_float")){
+    if(InsCmp(ins[0],"add_const_float")){//1 str for double
         AddConst(env,1);
     }
-    else if(InsCmp(ins[0],"add_const_str")){
+    else if(InsCmp(ins[0],"add_const_str")){//1 str no"" \b->' ' \n->'\n'
         AddConst(env,2);
     }
-    else if(InsCmp(ins[0],"push_const")){
+    else if(InsCmp(ins[0],"push_const")){//1 int for const id
 		PushConst(env);
     }
     else if(InsCmp(ins[0],"add")){
@@ -545,7 +545,7 @@ void DoIns(LapState *env){
     else if(InsCmp(ins[0],"print")){
 		Print(env);
     }
-    else if(InsCmp(ins[0],"get_command_arg")){
+    else if(InsCmp(ins[0],"get_command_arg")){//1 int for array index
 		GetCommandArg(env);
     }
     else{//小于0虚拟机问题 大于0编程问题
