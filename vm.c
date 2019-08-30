@@ -120,7 +120,7 @@ char** SplitIns(char* str){
 		temp[k]=onstr;
     }
     return temp;
-}//�޲���ָ�������˫�ո�
+}//无参数指令请带上双空格
 
 LapState *InitVM(char* path){
 	FILE *fp=fopen(path,"r+");
@@ -470,6 +470,10 @@ void Calculate(LapState *env,int sign){
 		}
 		break;
 		case '%':
+		if(!*(double*)op2->Value){
+			env->Err=1;
+			break;
+		}
 		switch(type){
 			case 0:
 				(*(int*)op1->Value)%=*(int*)op2->Value;
@@ -491,6 +495,22 @@ void Print(LapState *env){
 	env->Index--;
     PrintData(env->Stack[env->Index]);
     DeleteObject(env->Stack[env->Index]);
+}
+
+void GetCommandArg(LapState *env){
+    char** ins=env->Commands[env->PC];
+    int *i=ParseInt(ins[1]);
+    if(*i>args->Size-1){
+		env->Err=2;
+		return;
+    }
+    if(env->MaxIndex==env->Index){
+		env->MaxIndex+=20;
+		env->Stack=(LapObject**)realloc(env->Stack,sizeof(LapObject*[env->MaxIndex]));
+    }
+    env->Stack[env->Index]=CreateObjectFromObject(args->Property[*i]);
+    env->Index++;
+    free(i);
 }
 
 void DoIns(LapState *env){
@@ -525,6 +545,13 @@ void DoIns(LapState *env){
     else if(InsCmp(ins[0],"print")){
 		Print(env);
     }
+    else if(InsCmp(ins[0],"get_command_arg")){
+		GetCommandArg(env);
+    }
+    else{//小于0虚拟机问题 大于0编程问题
+		env->Err=-1;
+		printf("unrecognized ins:%s\n",ins[0]);
+    }
 }
 
 int StartVM(LapState *env){
@@ -541,7 +568,7 @@ int StartVM(LapState *env){
 
 int main(int argc,char* argv[]){
 	args=CreateObject(4,argc-1,NULL);
-	int i=2;
+	int i=1;
 	for(;i<argc;i++){
 		args->Property[i-1]=CreateObject(2,StrLen(argv[i]),argv[i]);
 	}
@@ -553,7 +580,15 @@ int main(int argc,char* argv[]){
 		return -1;
 	}
 	else if(StartVM(env)){
-		printf("something error happened\n");
+		i=env->Err;
+		switch(i){
+		case 1:
+			printf("Err:Div 0!\n");
+			break;
+		case 2:
+			printf("Err:Index out of range!\n");
+			break;
+		}
 	}
 	DeleteObject(args);
 	DeleteState(env);
