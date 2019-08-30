@@ -10,12 +10,11 @@ typedef struct LapObject{
 }LapObject;
 
 typedef struct{
-	LapObject** GlobalVars;
 	LapObject*** VarStacks;
 	LapObject** Stack;
 	LapObject** ConstVars;
 	char*** Commands;
-	int Index,ConstNum,GlobalNum,*VarNum,MaxConst,MaxGlobal,*MaxVar,MaxIndex,PC,*PCStack,MaxPC,TruePC,Err;
+	int Index,ConstNum,*VarNum,MaxConst,*MaxVar,MaxIndex,PC,*PCStack,MaxPC,TruePC,Err,StackPC;
 }LapState;
 
 long long QuickPower(long long x,long long y)
@@ -46,8 +45,8 @@ LapObject *CreateObject(int type,int size,void* value){
 		case 1:
 		temp->Value=malloc(sizeof(double));
 		case 2:
-		temp->Value=malloc(sizeof(char[size]));
-		memset(temp->Value,0,sizeof((char*)temp->Value));
+		temp->Value=malloc(sizeof(char[size+4]));
+		memset(temp->Value,0,sizeof(char[size]));
 		break;
 		case 3:
 		temp->Value=malloc(sizeof(int));
@@ -62,6 +61,7 @@ LapObject *CreateObject(int type,int size,void* value){
 LapObject *CreateObjectFromObject(LapObject *obj){
 	int size=obj->Size,i=0;
 	LapObject* temp=CreateObject(obj->Type,size,NULL);
+	int type;
 	switch(obj->Type){
 	case 0:
 	*(int*)temp->Value=*(int*)obj->Value;
@@ -70,12 +70,17 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 	*(double*)temp->Value=*(double*)obj->Value;
 	break;
 	case 2:
-	strcpy((char*)temp->Value,(char*)obj->Value);
+	//strcpy((char*)temp->Value,(char*)obj->Value);
+	for(;i<size;i++){
+		((char*)temp->Value)[i]=((char*)obj->Value)[i];
+	}
 	break;
 	case 3:
 	*(int*)temp->Value=*(int*)obj->Value;
 	case 4:
-	temp->Property=obj->Property;
+	for(;i<size;i++){
+		temp->Property[i]=CreateObjectFromObject(obj->Property[i]);
+	}
 	break;
 	}
 	return temp;
@@ -129,30 +134,35 @@ LapState *InitVM(char* path){
 		return NULL;
 	}
 	LapState *temp=(LapState*)malloc(sizeof(LapState));
-	temp->GlobalVars=(LapObject**)malloc(sizeof(LapObject*[20]));
 	temp->Stack=(LapObject**)malloc(sizeof(LapObject*[20]));
 	temp->ConstVars=(LapObject**)malloc(sizeof(LapObject*[20]));
     temp->VarStacks=(LapObject***)malloc(sizeof(LapObject**[4]));
+    temp->VarStacks[0]=(LapObject**)malloc(sizeof(LapObject*[20]));
     temp->MaxVar=(int*)malloc(sizeof(int[4]));
     temp->VarNum=(int*)malloc(sizeof(int[4]));
+    temp->VarNum[0]=0;
+    temp->MaxVar[0]=0;
     temp->PCStack=(int*)malloc(sizeof(int[4]));
     temp->Commands=(char***)malloc(sizeof(char**[20]));
+    temp->StackPC=0;
     int i=0;
     for(;i<4;i++){
 		temp->VarStacks[i]=(LapObject**)malloc(sizeof(LapObject*[20]));
 		temp->MaxVar[i]=20;
 		temp->VarNum[i]=0;
     }
+    i=0;
+    for(;i<20;i++){
+		temp->VarStacks[0][i]=NULL;
+    }
     /*for(;i<20;i++){
 		temp->Commands[i]=(char**)malloc(sizeof(char*[3]));
     }*/
     temp->Index=0;
     temp->ConstNum=0;
-    temp->GlobalNum=0;
     temp->MaxPC=20;
     temp->TruePC=0;
     temp->PC=0;
-    temp->MaxGlobal=20;
     temp->MaxConst=20;
     temp->MaxIndex=20;
     temp->Err=0;
@@ -206,11 +216,6 @@ void DeleteState(LapState *state){
 		DeleteObject(state->ConstVars[i]);
     }
     free(state->ConstVars);
-    i=0,max=state->GlobalNum;
-    for(;i<max;i++){
-		DeleteObject(state->GlobalVars[i]);
-    }
-    free(state->GlobalVars);
     i=0,max=state->VarNum[0];
     for(;i<max;i++){
 		DeleteObject(state->VarStacks[0][i]);
@@ -222,7 +227,6 @@ void DeleteState(LapState *state){
 		free(state->Commands[i][2]);
         free(state->Commands[i]);
     }
-    free(state->Commands);
     free(state->VarStacks[0]);
     free(state->VarStacks);
     free(state->VarNum);
@@ -401,6 +405,22 @@ void PushConst(LapState *env){
     free(i);
 }
 
+void PushVar(LapState *env,int sign){
+    char** ins=env->Commands[env->PC];
+    int *i=ParseInt(ins[1]);
+    if(env->MaxIndex==env->Index){
+		env->MaxIndex+=20;
+		env->Stack=(LapObject**)realloc(env->Stack,sizeof(LapObject*[env->MaxIndex]));
+    }
+    switch(sign){
+	case 'l':
+		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[env->StackPC][*i]);
+		break;
+    }
+    env->Index++;
+    free(i);
+}
+
 void Pop(LapState *env){
 	env->Index--;
 	DeleteObject(env->Stack[env->Index]);
@@ -415,14 +435,15 @@ void Calculate(LapState *env,int sign){
 	char* onstr=NULL;
 	LapObject *temp=op1;
 	double d1,d2;
+	int *onbool=NULL;
 	switch(sign){
 		case '+':
 		switch(type){
 		case 0:
-			(*(int*)op1->Value)+=*(int*)op2->Value;
+			*(int*)op1->Value+=*(int*)op2->Value;
 			break;
 		case 1:
-			(*(double*)op1->Value)+=*(double*)op2->Value;
+			*(double*)op1->Value+=*(double*)op2->Value;
 			break;
 		case 2:
 			type=op1->Size+op2->Size;
@@ -456,7 +477,7 @@ void Calculate(LapState *env,int sign){
 		}
 		break;
 		case '/':
-		if(!*(double*)op2->Value){
+		if(!*(int*)op2->Value){
 			env->Err=1;
 			break;
 		}
@@ -484,6 +505,45 @@ void Calculate(LapState *env,int sign){
 				*((double*)op1->Value)=d1-(int)(d1/d2)*d2;
 				break;
 		}
+		break;
+		case '>':
+		switch(type){
+		case 0:
+			(*(int*)op1->Value)=*(int*)op1->Value>*(int*)op2->Value;
+			break;
+		case 1:
+			(*(double*)op1->Value)=*(double*)op1->Value>*(double*)op2->Value;
+			break;
+		}
+		op1->Type=3;
+		break;
+		case '<':
+		switch(type){
+		case 0:
+			(*(int*)op1->Value)=*(int*)op1->Value<*(int*)op2->Value;
+			break;
+		case 1:
+			(*(double*)op1->Value)=*(double*)op1->Value<*(double*)op2->Value;
+			break;
+		}
+		op1->Type=3;
+		break;
+		case '=':
+		switch(type){
+		case 0:
+			(*(int*)op1->Value)=*(int*)op1->Value==*(int*)op2->Value;
+			break;
+		case 1:
+			(*(double*)op1->Value)=*(double*)op1->Value==*(double*)op2->Value;
+			break;
+		case 2:
+			onbool=malloc(sizeof(int));
+			*onbool=InsCmp((char*)op1->Value,(char*)op2->Value);
+			DeleteObject(op1);
+			temp=CreateObject(3,0,onbool);
+			break;
+		}
+		temp->Type=3;
 		break;
 	}
 	DeleteObject(op2);
@@ -513,12 +573,52 @@ void GetCommandArg(LapState *env){
     free(i);
 }
 
-void DoIns(LapState *env){
+void StoreVar(LapState *env,int sign){
+    char** ins=env->Commands[env->PC];
+    int *i=ParseInt(ins[1]),PC=env->StackPC;
+    switch(sign){
+	case 'l':
+		if(*i>env->MaxVar[PC]-1){
+			env->MaxVar[PC]+=20;
+			env->VarStacks[PC]=(LapObject**)realloc(env->VarStacks[PC],sizeof(LapObject*[env->MaxVar[PC]]));
+		}
+		if(env->VarStacks[PC][*i]!=NULL){
+			DeleteObject(env->VarStacks[PC][*i]);
+		}
+        env->VarStacks[PC][*i]=CreateObjectFromObject(env->Stack[0]);
+		break;
+    }
+    env->Index--;
+    DeleteObject(env->Stack[0]);
+    free(i);
+}
+
+void Jump(LapState *env,int sign){
+	int *line=NULL;
+	if(sign){
+		if(*(int*)env->Stack[0]->Value){
+			line=ParseInt(env->Commands[env->PC][1]);
+			env->PC=*line-2;
+			free(line);
+		}
+	}
+	else{
+		if(!(int*)env->Stack[0]->Value){
+			line=ParseInt(env->Commands[env->PC][1]);
+			env->PC=*line-2;
+			free(line);
+		}
+	}
+	env->Index--;
+	DeleteObject(env->Stack[0]);
+}
+
+void DoIns(LapState *env){//use ' ' to separate parms
 	char** ins=env->Commands[env->PC];
     if(InsCmp(ins[0],"add_const_int")){//1 str for int
         AddConst(env,0);
     }
-    if(InsCmp(ins[0],"add_const_float")){//1 str for double
+    else if(InsCmp(ins[0],"add_const_float")){//1 str for double
         AddConst(env,1);
     }
     else if(InsCmp(ins[0],"add_const_str")){//1 str no"" \b->' ' \n->'\n'
@@ -526,6 +626,9 @@ void DoIns(LapState *env){
     }
     else if(InsCmp(ins[0],"push_const")){//1 int for const id
 		PushConst(env);
+    }
+    else if(InsCmp(ins[0],"push_var_local")){//1 int for const id
+		PushVar(env,'l');
     }
     else if(InsCmp(ins[0],"add")){
 		Calculate(env,'+');
@@ -542,15 +645,33 @@ void DoIns(LapState *env){
     else if(InsCmp(ins[0],"mod")){
 		Calculate(env,'%');
     }
+    else if(InsCmp(ins[0],"bigger")){
+		Calculate(env,'>');
+    }
+    else if(InsCmp(ins[0],"smaller")){
+		Calculate(env,'<');
+    }
+    else if(InsCmp(ins[0],"equal")){
+		Calculate(env,'=');
+    }
     else if(InsCmp(ins[0],"print")){
 		Print(env);
+    }
+    else if(InsCmp(ins[0],"true_jump")){
+		Jump(env,1);
+    }
+    else if(InsCmp(ins[0],"false_jump")){
+		Jump(env,0);
     }
     else if(InsCmp(ins[0],"get_command_arg")){//1 int for array index
 		GetCommandArg(env);
     }
+    else if(InsCmp(ins[0],"store_var_local")){//1 int for var index
+		StoreVar(env,'l');
+    }
     else{//小于0虚拟机问题 大于0编程问题
 		env->Err=-1;
-		printf("unrecognized ins:%s\n",ins[0]);
+		printf("%d Err:unrecognized ins:%s\n",env->PC+1,ins[0]);
     }
 }
 
@@ -581,6 +702,7 @@ int main(int argc,char* argv[]){
 	}
 	else if(StartVM(env)){
 		i=env->Err;
+		printf("%d ",env->PC+1);
 		switch(i){
 		case 1:
 			printf("Err:Div 0!\n");
