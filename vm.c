@@ -420,6 +420,9 @@ void PushVar(LapState *env,int sign){
 	case 'l':
 		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[env->StackPC][*i]);
 		break;
+	case 'g':
+		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[0][*i]);
+		break;
     }
     env->Index++;
     free(i);
@@ -606,7 +609,23 @@ void StoreVar(LapState *env,int sign){
 		if(env->VarStacks[PC][*i]!=NULL){
 			DeleteObject(env->VarStacks[PC][*i]);
 		}
+		else{
+			env->VarNum[PC]++;
+		}
         env->VarStacks[PC][*i]=CreateObjectFromObject(env->Stack[0]);
+		break;
+	case 'g':
+		if(*i>env->MaxVar[0]-1){
+			env->MaxVar[0]+=20;
+			env->VarStacks[0]=(LapObject**)realloc(env->VarStacks[0],sizeof(LapObject*[env->MaxVar[0]]));
+		}
+		if(env->VarStacks[0][*i]!=NULL){
+			DeleteObject(env->VarStacks[0][*i]);
+		}
+		else{
+			env->VarNum[0]++;
+		}
+        env->VarStacks[0][*i]=CreateObjectFromObject(env->Stack[0]);
 		break;
     }
     env->Index--;
@@ -713,6 +732,9 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(InsCmp(ins[0],"push_var_local")){//1 int for var id
 		PushVar(env,'l');
     }
+    else if(InsCmp(ins[0],"push_var_global")){//1 int for var id
+		PushVar(env,'g');
+    }
     else if(InsCmp(ins[0],"add")){
 		Calculate(env,'+');
     }
@@ -759,6 +781,9 @@ void DoIns(LapState *env){//use ' ' to separate parms
     }
     else if(InsCmp(ins[0],"store_var_local")){//1 int for var index
 		StoreVar(env,'l');
+    }
+    else if(InsCmp(ins[0],"store_var_global")){//1 int for var index
+		StoreVar(env,'g');
     }
     else if(InsCmp(ins[0],"goto")){//1 int for line  1 int for parm num
 		Goto(env);
