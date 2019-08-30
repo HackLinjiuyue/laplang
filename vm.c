@@ -10,6 +10,7 @@ typedef struct LapObject{
 	void *Value;
 	int Type;
 	int Size;
+	int Protect;
 }LapObject;
 
 typedef struct{
@@ -40,6 +41,8 @@ LapObject *CreateObject(int type,int size,void* value){
 	temp->Type=type;
 	temp->Size=size;
 	temp->Value=value;
+	temp->Protect=0;
+	char onstr[1];
 	if(value==NULL){
 		switch(type){
 		case 0:
@@ -58,6 +61,7 @@ LapObject *CreateObject(int type,int size,void* value){
 		case 4:
 		temp->Property=(LapObject**)malloc(sizeof(LapObject*[size]));
 		break;
+		//case 5:文件指针
 		}
 	}
 	return temp;
@@ -87,6 +91,9 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 	for(;i<size;i++){
 		temp->Property[i]=CreateObjectFromObject(obj->Property[i]);
 	}
+	break;
+	case 5:
+	temp->Value=obj->Value;
 	break;
 	}
 	return temp;
@@ -211,7 +218,9 @@ void DeleteObject(LapObject *obj){
 	break;
 	case 4:
 	for(;i<size;i++){
-		DeleteObject(obj->Property[i]);
+		if(!obj->Protect){
+			DeleteObject(obj->Property[i]);
+		}
 	}
 	free(obj->Property);
 	break;
@@ -269,6 +278,9 @@ void PrintData(LapObject *obj){
 	break;
 	case 4:
 	printf("LapObject");
+	break;
+	case 5:
+	printf("File");
 	break;
     }
 }
@@ -580,6 +592,11 @@ void Calculate(LapState *env,int sign){
 		case 'o':
 			(*(int*)op1->Value)=*(int*)op1->Value||*(int*)op2->Value;
 		break;
+		case 'f':
+			temp->Value=fopen((char*)op1->Value,(char*)op2->Value);
+			temp->Type=5;
+			DeleteObject(op1);
+		break;
 	}
 	DeleteObject(op2);
 	env->Stack[env->Index]=temp;
@@ -749,6 +766,24 @@ void Asc(LapState *env){
 	env->Stack[env->Index-1]=CreateObject(0,0,x);
 }
 
+void Fgetc(LapState *env){//所有文件操作确保至少绑定在一个变量上
+	LapObject *obj=env->Stack[env->Index-1];
+	char *x=malloc(sizeof(char[2]));
+
+	x[0]=fgetc((FILE*)obj->Value);
+	x[1]=0;
+	free(obj);
+	env->Stack[env->Index-1]=CreateObject(2,1,x);
+}
+
+void CloseFile(LapState *env){
+	env->Index--;
+	LapObject *obj=env->Stack[env->Index];
+	fclose((FILE*)obj->Value);
+	free(obj);
+	env->Stack[env->Index]=NULL;
+}
+
 void DoIns(LapState *env){//use ' ' to separate parms
 	char** ins=env->Commands[env->PC];
 	//printf("%s\n",ins[0]);
@@ -841,6 +876,15 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(StringCmp(ins[0],"asc")){
 		Asc(env);
     }
+    else if(StringCmp(ins[0],"open_file")){
+		Calculate(env,'f');
+    }
+    else if(StringCmp(ins[0],"close_file")){
+		CloseFile(env);
+    }
+    else if(StringCmp(ins[0],"fgetc")){
+		Fgetc(env);
+    }
     else{//小于0虚拟机问题 大于0编程问题
 		env->Err=-1;
 		printf("%d Err:unrecognized ins:%s\n",env->PC+1,ins[0]);
@@ -861,6 +905,7 @@ int StartVM(LapState *env){
 
 int main(int argc,char* argv[]){
 	args=CreateObject(4,argc-1,NULL);
+	args->Protect=1;
 	int i=1;
 	for(;i<argc;i++){
 		args->Property[i-1]=CreateObject(2,StrLen(argv[i]),argv[i]);
@@ -892,5 +937,4 @@ int main(int argc,char* argv[]){
 	}
 	DeleteObject(args);
 	DeleteState(env);
-	system("pause");
 }
