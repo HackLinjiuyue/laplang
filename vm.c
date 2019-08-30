@@ -18,6 +18,7 @@ typedef struct{
 	LapObject** Stack;
 	LapObject** ConstVars;
 	char*** Commands;
+	char* Onstr;
 	int Index,ConstNum,*VarNum,MaxConst,*MaxVar,MaxIndex,PC,*PCStack,MaxPC,TruePC,Err,StackPC,MaxStackPC;
 }LapState;
 
@@ -456,6 +457,7 @@ void Calculate(LapState *env,int sign){
 	LapObject *temp=op1;
 	double d1,d2;
 	int *onbool=NULL,n;
+	FILE *fp=NULL;
 	switch(sign){
 		case '+':
 		switch(type){
@@ -595,7 +597,14 @@ void Calculate(LapState *env,int sign){
 			(*(int*)op1->Value)=*(int*)op1->Value||*(int*)op2->Value;
 		break;
 		case 'f':
-			temp->Value=fopen((char*)op1->Value,(char*)op2->Value);
+			fp=fopen((char*)op1->Value,(char*)op2->Value);
+			if(fp==NULL){
+				env->Err=5;
+				env->Onstr=op1->Value;
+				free(op1);
+				break;
+			}
+			temp->Value=fp;
 			temp->Type=5;
 			DeleteObject(op1);
 		break;
@@ -934,6 +943,10 @@ int main(int argc,char* argv[]){
 			break;
 		case 4:
 			printf("Err:Stack Overflow Max:%d\n",MAX_STACK);
+			break;
+		case 5:
+			printf("Err:File %s Not Exist!\n",env->Onstr);
+			free(env->Onstr);
 			break;
 		}
 	}
