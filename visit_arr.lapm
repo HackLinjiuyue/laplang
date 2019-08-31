@@ -1,0 +1,34 @@
+add_const_str hello\bworld\n
+add_const_int 0
+add_const_int 4
+add_const_int 1
+push_obj 4
+store_var_local 0
+push_var_local 0 true
+push_const 1
+arr_fill
+push_const 1
+store_var_local 1
+push_var_local 1 f
+push_const 2
+smaller
+false_jump 28
+push_var_local 0 true
+push_var_local 1 f
+index
+print
+push_var_local 1 f
+push_const 3
+add
+store_var_local 1
+push_var_local 1 f
+push_const 2
+smaller
+true_jump 16
+
+等价于代码（py）：
+x=[0]*4
+i=0
+while i<4:
+  print x[i]
+  i+=1
