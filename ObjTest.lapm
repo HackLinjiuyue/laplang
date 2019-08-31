@@ -1,0 +1,11 @@
+add_const_str hello\bworld
+add_const_int 0
+push_obj 1
+store_var_local 0
+push_var_local 0 true
+push_const 0
+set_property 0
+push_var_local 0 true
+push_const 1
+index
+print
