@@ -823,6 +823,16 @@ void Fgetc(LapState *env){//所有文件操作确保至少绑定在一个变量�
 	env->Stack[env->Index-1]=CreateObject(2,1,x);
 }
 
+void Fwrite(LapState *env){
+	env->Index--;
+	LapObject *op2=env->Stack[env->Index];
+	env->Index--;
+	LapObject *op1=env->Stack[env->Index];
+	fputs((FILE*)op2->Value,(char*)op1->Value);
+	free(op1);
+	DeleteObject(op2);
+}
+
 void CloseFile(LapState *env){
 	env->Index--;
 	LapObject *obj=env->Stack[env->Index];
@@ -882,6 +892,9 @@ void ArrayFill(LapState *env){//配合引用使用
 	LapObject *op1=env->Stack[env->Index];
 	int max=op1->Size,i=0;
 	for(;i<max;i++){
+		if(op1->Property[i]!=NULL){
+			DeleteObject(op1->Property[i]);
+		}
 		op1->Property[i]=CreateObjectFromObject(op2);
 	}
 	DeleteObject(op2);
@@ -996,6 +1009,9 @@ void DoIns(LapState *env){//use ' ' to separate parms
     }
     else if(StringCmp(ins[0],"fgetc")){
 		Fgetc(env);
+    }
+    else if(StringCmp(ins[0],"fwrite")){
+		Fwrite(env);
     }
     else if(StringCmp(ins[0],"arr_push")){
 		ArrayPush(env);
