@@ -53,8 +53,8 @@ LapObject *CreateObject(int type,int size,void* value){
 		temp->Value=malloc(sizeof(double));
 		break;
 		case 2:
-		temp->Value=malloc(sizeof(char[size+4]));
-		memset(temp->Value,0,sizeof(char[size+4]));
+		temp->Value=malloc(sizeof(char[size+3]));
+		memset(temp->Value,0,sizeof(char[size+3]));
 		break;
 		case 3:
 		temp->Value=malloc(sizeof(int));
@@ -110,6 +110,13 @@ int StrLen(char* str){
     return i;
 }
 
+void ExtendStack(LapState *env){
+    if(env->MaxIndex==env->Index){
+		env->MaxIndex+=20;
+		env->Stack=(LapObject**)realloc(env->Stack,sizeof(LapObject*[env->MaxIndex]));
+    }
+}
+
 char** SplitIns(char* str){
 	int len=StrLen(str)-1;
     char** temp=(char**)malloc(sizeof(char*[3])),*onstr=(char*)malloc(sizeof(char[20]));
@@ -122,8 +129,8 @@ char** SplitIns(char* str){
 			if(k==2){
 				break;
 			}
-			onstr=(char*)malloc(sizeof(char[4]));
-			memset(onstr,0,4*sizeof(char));
+			onstr=(char*)malloc(sizeof(char[5]));
+			memset(onstr,0,5*sizeof(char));
 			max=4;
 			k++;
 		}
@@ -203,30 +210,30 @@ LapState *InitVM(char* path){
 }
 
 void DeleteObject(LapObject *obj){
-	int type=obj->Type,size=obj->Size,i=0;
-	switch(type){
-	case 0:
-	free((int*)obj->Value);
-	break;
-	case 1:
-	free((double*)obj->Value);
-	break;
-	case 2:
-	free((char*)obj->Value);
-	break;
-	case 3:
-	free((int*)obj->Value);
-	break;
-	case 4:
-	for(;i<size;i++){
-		if(!obj->Protect){
-			DeleteObject(obj->Property[i]);
+	if(!obj->Protect){
+		int type=obj->Type,size=obj->Size,i=0;
+		switch(type){
+		case 0:
+		free((int*)obj->Value);
+		break;
+		case 1:
+		free((double*)obj->Value);
+		break;
+		case 2:
+		free((char*)obj->Value);
+		break;
+		case 3:
+		free((int*)obj->Value);
+		break;
+		case 4:
+		for(;i<size;i++){
+				DeleteObject(obj->Property[i]);
+			}
+		free(obj->Property);
+		break;
 		}
+		free(obj);
 	}
-	free(obj->Property);
-	break;
-	}
-	free(obj);
 }
 
 void DeleteState(LapState *state){
@@ -348,8 +355,8 @@ double* ParseFloat(char* str){
 
 char* ParseStr(const char* str){
 	int max=StrLen(str);
-	char* temp=malloc(sizeof(char[max]));
-	memset(temp,0,sizeof(temp));
+	char* temp=malloc(sizeof(char[max+3]));
+	memset(temp,0,sizeof(char[max+3]));
 	int i=0,index=0;
 	char lastc=-1;
 	for(;i<max;i++){
@@ -413,10 +420,7 @@ void AddConst(LapState *env,char type){
 void PushConst(LapState *env){
     char** ins=env->Commands[env->PC];
     int *i=ParseInt(ins[1]);
-    if(env->MaxIndex==env->Index){
-		env->MaxIndex+=20;
-		env->Stack=(LapObject**)realloc(env->Stack,sizeof(LapObject*[env->MaxIndex]));
-    }
+    ExtendStack(env);
     env->Stack[env->Index]=CreateObjectFromObject(env->ConstVars[*i]);
     env->Index++;
     free(i);
@@ -424,17 +428,26 @@ void PushConst(LapState *env){
 
 void PushVar(LapState *env,int sign){
     char** ins=env->Commands[env->PC];
-    int *i=ParseInt(ins[1]);
-    if(env->MaxIndex==env->Index){
-		env->MaxIndex+=20;
-		env->Stack=(LapObject**)realloc(env->Stack,sizeof(LapObject*[env->MaxIndex]));
-    }
+    int *i=ParseInt(ins[1]),s=StringCmp(ins[2],"true");
+    ExtendStack(env);
     switch(sign){
 	case 'l':
-		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[env->StackPC][*i]);
+		if(s){
+			env->Stack[env->Index]=env->VarStacks[env->StackPC][*i];
+			env->Stack[env->Index]->Protect=1;
+		}
+		else{
+			env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[env->StackPC][*i]);
+		}
 		break;
 	case 'g':
-		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[0][*i]);
+		if(s){
+			env->Stack[env->Index]=env->VarStacks[0][*i];
+			env->Stack[env->Index]->Protect=1;
+		}
+		else{
+			env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[0][*i]);
+		}
 		break;
     }
     env->Index++;
@@ -643,10 +656,7 @@ void GetCommandArg(LapState *env){
 		env->Err=2;
 		return;
     }
-    if(env->MaxIndex==env->Index){
-		env->MaxIndex+=20;
-		env->Stack=(LapObject**)realloc(env->Stack,sizeof(LapObject*[env->MaxIndex]));
-    }
+    ExtendStack(env);
     env->Stack[env->Index]=CreateObjectFromObject(args);
     env->Index++;
     free(i);
@@ -795,6 +805,25 @@ void CloseFile(LapState *env){
 	env->Stack[env->Index]=NULL;
 }
 
+void PushObj(LapState *env){
+    ExtendStack(env);
+    int *n=ParseInt(env->Commands[env->PC][1]);
+    env->Stack[env->Index]=CreateObject(4,*n,NULL);
+    env->Index++;
+    free(n);
+}
+
+void SetProperty(LapState *env){//引用设置
+	char** ins=env->Commands[env->PC];
+	env->Index--;
+	LapObject *op2=env->Stack[env->Index];
+	int *i=ParseInt(ins[1]);
+	env->Index--;
+	env->Stack[env->Index]->Property[*i]=CreateObjectFromObject(op2);
+	DeleteObject(op2);
+	free(i);
+}
+
 void DoIns(LapState *env){//use ' ' to separate parms
 	char** ins=env->Commands[env->PC];
 	//printf("%s\n",ins[0]);
@@ -813,10 +842,10 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(StringCmp(ins[0],"push_const")){//1 int for const id
 		PushConst(env);
     }
-    else if(StringCmp(ins[0],"push_var_local")){//1 int for var id
+    else if(StringCmp(ins[0],"push_var_local")){//1 int for var id 1 true for reference
 		PushVar(env,'l');
     }
-    else if(StringCmp(ins[0],"push_var_global")){//1 int for var id
+    else if(StringCmp(ins[0],"push_var_global")){//1 int for var id 1 true for reference
 		PushVar(env,'g');
     }
     else if(StringCmp(ins[0],"add")){
@@ -877,6 +906,12 @@ void DoIns(LapState *env){//use ' ' to separate parms
     }
     else if(StringCmp(ins[0],"store_var_global")){//1 int for var index
 		StoreVar(env,'g');
+    }
+    else if(StringCmp(ins[0],"push_obj")){//1 int for property num
+		PushObj(env);
+    }
+    else if(StringCmp(ins[0],"set_property")){//1 int for property index
+		SetProperty(env);
     }
     else if(StringCmp(ins[0],"goto")){//1 int for line  1 int for parm num
 		Goto(env);
