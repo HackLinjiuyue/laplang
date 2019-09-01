@@ -703,9 +703,33 @@ void SetProperty(LapState *env){//引用设置
 	LapObject *op2=env->Stack[env->Index];
 	int *i=ParseInt(ins[1]);
 	env->Index--;
-	env->Stack[env->Index]->Property[*i]=CreateObjectFromObject(op2);
+	LapObject *op1=env->Stack[env->Index];
+	if(op1->Property[*i]!=NULL){
+		FreeObject(op1->Property[*i]);
+	}
+	op1->Property[*i]=CreateObjectFromObject(op2);
 	FreeObject(op2);
 	free(i);
+}
+
+void SetIndex(LapState *env){//引用设置
+	env->Index--;
+	LapObject *op3=env->Stack[env->Index];
+	env->Index--;
+	LapObject *op2=env->Stack[env->Index];
+	env->Index--;
+	LapObject *op1=env->Stack[env->Index];
+	int index=*(int*)op2->Value;
+	if(index>op1->Size-1){
+		env->Err=2;
+		return;
+	}
+	if(op1->Property[index]!=NULL){
+		FreeObject(op1->Property[index]);
+	}
+	op1->Property[index]=CreateObjectFromObject(op3);
+	FreeObject(op2);
+	FreeObject(op3);
 }
 
 void ArrayPush(LapState *env){//配合引用使用
@@ -898,6 +922,9 @@ void DoIns(LapState *env){//use ' ' to separate parms
     }
     else if(StringCmp(ins[0],"set_property")){//1 int for property index
 		SetProperty(env);
+    }
+    else if(StringCmp(ins[0],"set_index")){//1 int for property index
+		SetIndex(env);
     }
     else if(StringCmp(ins[0],"goto")){//1 int for line  1 int for parm num
 		Goto(env);
