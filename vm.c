@@ -537,12 +537,7 @@ void StoreVar(LapState *env,int sign){
 			env->MaxVar[PC]+=20;
 			env->VarStacks[PC]=(LapObject**)realloc(env->VarStacks[PC],sizeof(LapObject*[env->MaxVar[PC]]));
 		}
-		if(env->VarStacks[PC][*i]!=NULL){
-			FreeObject(env->VarStacks[PC][*i]);
-		}
-		else{
-			env->VarNum[PC]++;
-		}
+		env->VarNum[PC]++;
         env->VarStacks[PC][*i]=CreateObjectFromObject(env->Stack[0]);
 		break;
 	case 'g':
@@ -550,13 +545,41 @@ void StoreVar(LapState *env,int sign){
 			env->MaxVar[0]+=20;
 			env->VarStacks[0]=(LapObject**)realloc(env->VarStacks[0],sizeof(LapObject*[env->MaxVar[0]]));
 		}
-		if(env->VarStacks[0][*i]!=NULL){
-			FreeObject(env->VarStacks[0][*i]);
-		}
-		else{
-			env->VarNum[0]++;
-		}
+		env->VarNum[0]++;
         env->VarStacks[0][*i]=CreateObjectFromObject(env->Stack[0]);
+		break;
+    }
+    env->Index--;
+    FreeObject(env->Stack[0]);
+    env->Stack[0]=NULL;
+    free(i);
+}
+
+void SetVar(LapState *env,int sign){
+    char** ins=env->Commands[env->PC];
+    int *i=ParseInt(ins[1]),PC=env->StackPC;
+    switch(sign){
+	case 'l':
+		if(env->VarStacks[PC][*i]!=NULL){
+			if(env->VarStacks[PC][*i]->Protect){
+				env->VarStacks[PC][*i]=env->Stack[0];
+			}
+			else{
+				FreeObject(env->VarStacks[PC][*i]);
+				env->VarStacks[PC][*i]=CreateObjectFromObject(env->Stack[0]);
+			}
+		}
+		break;
+	case 'g':
+		if(env->VarStacks[0][*i]!=NULL){
+			if(env->VarStacks[0][*i]->Protect){
+				env->VarStacks[0][*i]=env->Stack[0];
+			}
+			else{
+				FreeObject(env->VarStacks[0][*i]);
+				env->VarStacks[0][*i]=CreateObjectFromObject(env->Stack[0]);
+			}
+		}
 		break;
     }
     env->Index--;
@@ -918,6 +941,12 @@ void DoIns(LapState *env){//use ' ' to separate parms
     }
     else if(StringCmp(ins[0],"push_obj")){//1 int for property num
 		PushObj(env);
+    }
+    else if(StringCmp(ins[0],"set_var_local")){//1 int for property index
+		SetVar(env,'l');
+    }
+    else if(StringCmp(ins[0],"set_var_global")){//1 int for property index
+		SetVar(env,'g');
     }
     else if(StringCmp(ins[0],"set_property")){//1 int for property index
 		SetProperty(env);
