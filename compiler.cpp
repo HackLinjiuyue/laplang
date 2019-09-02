@@ -21,7 +21,7 @@ using namespace std;
 //定义部分
 const string Symbols[30]={")","|","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","{","}","==",".","!","//","/*","*/","[","]",","};
 
-const string KeyWords[9]={"function","return","if","break","continue","when","class","else","print"};
+const string KeyWords[12]={"function","return","if","break","continue","when","class","else","print","local","global","set"};
 
 const string Basic_type[10]={"int","float","bool","string","void","Array","File","DLLHandle","NativeFunction","Object"};
 
@@ -261,7 +261,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			}
 			break;
 		}
-		if(Is_in_s(KeyWords,&onstr,9)){
+		if(Is_in_s(KeyWords,&onstr,12)){
 			last_type="keyword";
 			if(onstr=="function"){
 				is_func=true;
@@ -367,6 +367,9 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				if(last_get=='\\'&&onget[0]=='"'){
 					onstr+=onget[0];
 					onget[0]=0;
+				}
+				else if(onget[0]==' '){
+					onstr+="\\b";
 				}
 				else{
 					onstr+=onget[0];
@@ -698,13 +701,15 @@ void Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_gl
 }
 
 void Grammar_check(vector<Token> &tokens){
-	int i=0;
+	int i=0,posi;
 	int max=tokens.size();
-	Token token;
-	bool err=false;
+	Token token,next,type;
+	bool err=false,result;
 	int tab=0,last_tab=0;
 	int line,byte,m;
 	map<string,var> domain;
+	vector<Token> exp=vector<Token>();
+	map<string,var>::iterator iter;
 	domains.push_back(map<string,var>());
 	var_num.push_back(0);
 	for(;i<max;i++){
@@ -734,8 +739,8 @@ void Grammar_check(vector<Token> &tokens){
 		byte=token.byte;
 		if(token.Type=="keyword"){
 			if(token.Value=="print"){
-				vector<Token> exp=vector<Token>();
 				i++;
+				exp=vector<Token>();
 				for(;i<max;i++){
 					token=tokens[i];
 					if(token.Value[0]=='\n'){
@@ -762,6 +767,106 @@ void Grammar_check(vector<Token> &tokens){
 					break;
 				}
 				out.push_back(Ins("print"));
+			}
+			else if(token.Value=="set"){
+                i++;
+                token=tokens[i];
+                iter=domains[0].find(token.Value);
+                string t="";
+                if(iter==domains[0].end()){
+					iter=domains[tab].find(token.Value);
+					if(iter==domains[tab].end()){
+						error_list.push_back("错误："+Position(line,byte)+" 变量'"+token.Value+"'未在此作用域中定义");
+						break;
+					}
+					t="local";
+                }
+                else{
+					t="global";
+                }
+				i++;
+				exp=vector<Token>();
+				for(;i<max;i++){
+					token=tokens[i];
+					if(token.Value[0]=='\n'){
+						break;
+					}
+					if(token.Type=="keyword"){
+						err=true;
+						error_list.push_back("错误："+Position(line,byte)+" 表达式中不能出现关键字");
+						break;
+					}
+					exp.push_back(token);
+				}
+				if(err){
+					break;
+				}
+				if(exp.size()==0){
+					error_list.push_back("错误："+Position(line,byte)+" 表达式不能为空");
+					break;
+				}
+				exp=Trans_exp(exp);
+				exp.push_back(Token());
+				Parse_exp(exp,false,domains[tab],tab==0);
+				if(!error_list.empty()){
+					break;
+				}
+				out.push_back(Ins("set_var_"+t,Tostring(iter->second.id)));
+			}
+			else{
+				i++;
+				type=tokens[i];
+				if(!Is_in_s(Basic_type,&type.Value,10)){
+					error_list.push_back("错误："+Position(type.line,type.byte)+" 类型'"+type.Value+"'无效");
+					break;
+				}
+				i++;
+				next=tokens[i];
+				if(token.Value=="local"){
+					iter=domains[tab].find(next.Value);
+					posi=var_num[tab]++;
+					domains[tab].insert(pair<string,var>(next.Value,var(posi,type.Value)));
+					result=iter==domains[tab].end();
+				}
+				else{
+					iter=domains[0].find(next.Value);
+					posi=var_num[0]++;
+					domains[tab].insert(pair<string,var>(next.Value,var(posi,type.Value)));
+					result=iter==domains[0].end();
+				}
+				if(!result){
+					error_list.push_back("错误："+Position(line,byte)+" 变量'"+next.Value+"'已在此作用域中定义");
+					break;
+				}
+				i++;
+				exp=vector<Token>();
+				type.Type=token.Value;
+				for(i;i<max;i++){
+					token=tokens[i];
+					if(token.Value[0]=='\n'){
+						break;
+					}
+					if(token.Type=="keyword"){
+						err=true;
+						error_list.push_back("错误："+Position(line,byte)+" 表达式中不能出现关键字");
+						break;
+					}
+					exp.push_back(token);
+				}
+				if(err){
+					break;
+				}
+				if(exp.size()==0){
+					error_list.push_back("错误："+Position(line,byte)+" 表达式不能为空");
+					break;
+				}
+				exp=Trans_exp(exp);
+				exp.push_back(Token());
+				Parse_exp(exp,false,domains[tab],tab==0);
+				if(!error_list.empty()){
+					break;
+				}
+				out.push_back(Ins("store_var_"+type.Type,Tostring(posi)));
 			}
 		}
 		last_tab=tab;
