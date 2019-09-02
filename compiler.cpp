@@ -1,12 +1,9 @@
 #include<iostream>
 #include<vector>
 #include<map>
-#include<algorithm>
 #include<sstream>
 #include<stack>
 #include<math.h>
-
-#define INNER_FUNCTION 1
 
 using namespace std;
 
@@ -31,10 +28,24 @@ const string l2[] = { "*","/","<<",">>","%" };
 const string l3[] = { "^" };
 const string l4[] = { "||","&&" };
 const string l5[] = { "==",">","<",">=","<=","!=","!"};
-const string l6[] = { "=" };
-const string l7[] = { "@" };
+const string l6[] = { "@" };
+const string l7[] = { "=" };
 
 vector<string> error_list;
+
+class Ins{
+	public:
+	string Value,arg1,arg2; 
+	Ins(string value,string a1="",string a2=""){
+		Value=value;
+		arg1=a1;
+		arg2=a2;
+	}
+};
+
+vector<int> loop_head;
+
+vector<Ins> out;
 
 stringstream stream;
 
@@ -43,7 +54,6 @@ int digui=0,ceng=-1,reg_max,var_count=0,label_count=0,size_add=0;
 
 bool last_func=false,inner_call=false,inner_list=false;
 
-string out="";
 
 class Token{
 public:
@@ -362,7 +372,7 @@ int op_Level(const string op)
 	if (Is_in_s(l6, &op, 1))
 		return 0;
 	if (Is_in_s(l7, &op, 1))
-		return 6;
+		return 0;
 	return -1;
 
 }
@@ -535,44 +545,11 @@ vector<Token> Fold(vector<Token> &token_list){
 				}
 			}
 			if(kh>0){
-				error_list.push_back("错误："+Position(line,byte)+" 列表定义缺少']'");
+				error_list.push_back("错误："+Position(line,byte)+" 数组索引缺少']'");
 				break;
 			}
 			temp.push_back(Token("list","",line,byte,*arg_list));
 			delete arg_list;
-			delete arg;
-		}
-		else if(token.Value=="{"){
-			arg=new vector<Token>();
-			kh=1;
-			i++;
-			line=token.line;
-			byte=token.byte;
-			for(;i<token_list.size();i++){
-				token=token_list[i];
-				line=token.line;
-				byte=token.byte;
-				if(token.Value=="return"){
-					is_return=true;
-				}
-				else if(token.Value=="}"){
-					kh--;
-				}
-				else if(token.Value=="{"){
-					kh++;
-				}
-				if(kh==0){
-					break;
-				}
-				arg->push_back(token);
-			}
-			if(kh>0){
-				error_list.push_back("错误："+Position(line,byte)+" 代码块缺少'}'");
-				break;
-			}
-
-			temp.push_back(Token("codebox","",line,byte,Fold(*arg),is_return));
-			is_return=false;
 			delete arg;
 		}
 		else{
@@ -584,6 +561,93 @@ vector<Token> Fold(vector<Token> &token_list){
 	}
 	return temp;
 }
+
+void Parse_exp(vector<Token> &exp){
+	vector<Token> s;
+	int i=0,max=exp.size();
+	Token op1,op2,op;
+	for(;i<max;i++){
+		op=exp[i];
+		if(op.Type=="op"){
+			op2=s.back();
+			s.pop_back();
+			if(op.Value=="!"){
+				out.push_back(Ins("not"));
+			}
+			else{
+				op1=s.back();
+				s.pop_back();
+				if(op.Value=="+"){
+					out.push_back(Ins("add"));
+				}
+				else if(op.Value=="-"){
+					out.push_back(Ins("sub"));
+				}
+				else if(op.Value=="*"){
+					out.push_back(Ins("mul"));
+				}
+				else if(op.Value=="/"){
+					out.push_back(Ins("div"));
+				}
+				else if(op.Value=="%"){
+					out.push_back(Ins("mod"));
+				}
+				else if(op.Value=="@"){
+					out.push_back(Ins("index"));
+				}
+			}
+		}
+		else{
+			s.push_back(exp[i]);
+		}
+	}
+}
+
+void Grammar_check(vector<Token> &tokens){
+	int i=0;
+	int max=tokens.size();
+	Token token;
+	bool err=false;
+	int tab=0;
+	int line,byte;
+	for(;i<max;i++){
+		tab=0;
+		while(tokens[i].Value[0]=='\t'){
+			tab++;
+			i++;
+		}
+		token=tokens[i];
+		line=token.line;
+		byte=token.byte;
+		if(token.Type=="keyword"){
+			if(token.Value=="print"){
+				vector<Token> exp=vector<Token>();
+				i++;
+				for(;i<max;i++){
+					token=tokens[i];
+					if(token.Value[0]=='\n'){
+						break;
+					}
+					if(token.Type=="keyword"){
+						err=true;
+						error_list.push_back("错误："+Position(line,byte)+" 表达式中不能出现关键字");
+						break;
+					}
+					exp.push_back(token);
+				}
+				if(err){
+					break;
+				}
+				if(exp.size()==0){
+					error_list.push_back("错误："+Position(line,byte)+" 表达式不能为空");
+					break; 
+				} 
+				exp=Trans_exp(exp);
+				out.push_back(Ins("print"));
+			}
+		}
+	}
+} 
 
 void Compile_file(string File_name){
 	FILE *fp=fopen(File_name.c_str(),"r");
@@ -604,6 +668,7 @@ void Compile_file(string File_name){
 	token_list.push_back(Token("break","\n",token.line+1,0));
 	if(error_list.empty()){
 		last_func=false;
+		Grammar_check(token_list);
 		//语法解析
 	}/*
 	if(error_list.empty()){
