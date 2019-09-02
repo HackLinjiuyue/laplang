@@ -8,12 +8,12 @@ dlopen
 store_var_local 0
 push_var_local 0 true
 push_const 1
-dlsym
+dlsym 7
 store_var_local 1
 push_const 2
 push_const 2
 push_var_local 1 true
-call_native
+call_native 2
 print
 
 hw.c
@@ -25,5 +25,3 @@ LapObject* Add(LapObject* args){
 	*temp=*(int*)args->Property[0]->Value+*(int*)args->Property[1]->Value;
 	return CreateObject(Lint,0,temp);
 }
-int AddType=Lnative;
-int AddSize=2;
