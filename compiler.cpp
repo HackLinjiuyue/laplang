@@ -5,15 +5,23 @@
 #include<stack>
 #include<math.h>
 
+enum LapType{
+	Lint=0,
+	Lfloat,
+	Lbool,
+	Lstring,
+	Lobject,
+	Lfile,
+	Lhandle,
+	Lnative
+};
+
 using namespace std;
 
 //定义部分
+const string Symbols[30]={")","|","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","{","}","==",".","!","//","/*","*/","[","]",","};
 
-const char* HEX="0123456789abcdef";
-
-const string Symbols[29]={")","|","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","{","}","==",",","!","//","/*","*/","[","]"};
-
-const string KeyWords[10]={"function","return","if","break","continue","when","class","else"};
+const string KeyWords[9]={"function","return","if","break","continue","when","class","else","print"};
 
 const string Basic_type[10]={"int","float","bool","string","void","Array","File","DLLHandle","NativeFunction","Object"};
 
@@ -28,18 +36,29 @@ const string l2[] = { "*","/","<<",">>","%" };
 const string l3[] = { "^" };
 const string l4[] = { "||","&&" };
 const string l5[] = { "==",">","<",">=","<=","!=","!"};
-const string l6[] = { "@" };
-const string l7[] = { "=" };
+const string l6[] = { "@" ,"."};
+
+const string ct[4]={"int","float","bool","string"};
 
 vector<string> error_list;
 
 class Ins{
 	public:
-	string Value,arg1,arg2; 
+	string Value,arg1,arg2;
 	Ins(string value,string a1="",string a2=""){
 		Value=value;
 		arg1=a1;
 		arg2=a2;
+	}
+	string encode(){
+		string temp=Value;
+		if(arg1!=""){
+			temp+=" "+arg1;
+		}
+		if(arg2!=""){
+			temp+=" "+arg2;
+		}
+		return temp+'\n';
 	}
 };
 
@@ -48,6 +67,20 @@ vector<int> loop_head;
 vector<Ins> out;
 
 stringstream stream;
+
+class var{
+	public:
+	int id;
+	string type;
+	var(int i,string t){
+		id=i;
+		type=t;
+	}
+};
+
+vector<map<string,var> > domains;
+
+vector<int> var_num;
 
 
 int digui=0,ceng=-1,reg_max,var_count=0,label_count=0,size_add=0;
@@ -92,6 +125,9 @@ public:
 			temp+="[}]\n";
 		}
 		return temp;
+	}
+	bool operator==(Token other){
+		return other.Type==this->Type&&other.Value==this->Value;
 	}
 };
 
@@ -169,7 +205,7 @@ string Tostring(size_t value){
 	stream.clear();
 	return temp;
 }
-
+/*
 string itoh(int i,int encode_length){
 	string temp="";
 	while(i>0){
@@ -180,7 +216,7 @@ string itoh(int i,int encode_length){
 		temp='0'+temp;
 	}
 	return temp;
-}
+}*/
 
 int floatstoi(string *s){
 	string onstr;
@@ -202,6 +238,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 	char last_get;
 	int line=1,byte=0,small_count;
 	bool is_func=false,is_float=false;
+	Token token;
 	while(onget[0]!=EOF){
 		onget[0]=fgetc(fp);
 		byte++;
@@ -224,7 +261,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			}
 			break;
 		}
-		if(Is_in_s(KeyWords,&onstr,10)){
+		if(Is_in_s(KeyWords,&onstr,9)){
 			last_type="keyword";
 			if(onstr=="function"){
 				is_func=true;
@@ -251,14 +288,14 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				onstr="";
 			}
 		}
-		else if(Is_in_s(Symbols,&onget,29)){
+		else if(Is_in_s(Symbols,&onget,30)){
 			if(last_type!="op"&&onstr.length()>0){
 				token_list->push_back(Token(last_type,onstr,line,byte));
 				onstr="";
 			}
 			linshi=last_op+onget[0];
 			last_op=onget;
-			if(Is_in_s(Symbols,&linshi,29)&&linshi.size()>1){
+			if(Is_in_s(Symbols,&linshi,30)&&linshi.size()>1){
 				if(last_type=="op"){
 					token_list->pop_back();
 				}
@@ -306,12 +343,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 					break;
 				}
 				if(is_float){
-					if(small_count<9){
-						token_list->push_back(Token("float",onstr,line,byte,vector<Token>(),false,small_count));
-					}
-					else{
-						token_list->push_back(Token("double",onstr,line,byte,vector<Token>(),false,small_count));
-					}
+					token_list->push_back(Token("float",onstr,line,byte,vector<Token>(),false,small_count));
 				}
 				else{
 					token_list->push_back(Token("int",onstr,line,byte,vector<Token>(),false,small_count));
@@ -325,14 +357,14 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			}
 		}
 		else if(onget[0]=='"'){
-			onstr="\"";
+			onstr="";
 			onget[0]=fgetc(fp);
 			while(onget[0]!='"'){
 				if(onget[0]=='\n'||onget[0]==EOF){
 					error_list.push_back("错误："+Position(line,byte)+" 字符串末尾缺少<\">");
 					break;
 				}
-				if(last_get=='\\'){
+				if(last_get=='\\'&&onget[0]=='"'){
 					onstr+=onget[0];
 					onget[0]=0;
 				}
@@ -342,7 +374,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				last_get=onget[0];
 				onget[0]=fgetc(fp);
 			}
-			token_list->push_back(Token("string",onstr+'"',line,byte));
+			token_list->push_back(Token("string",onstr,line,byte));
 			onstr="";
 		}
 		else{
@@ -369,9 +401,7 @@ int op_Level(const string op)
 		return 4;
 	if (Is_in_s(l5, &op, 7))
 		return 5;
-	if (Is_in_s(l6, &op, 1))
-		return 0;
-	if (Is_in_s(l7, &op, 1))
+	if (Is_in_s(l6, &op, 2))
 		return 0;
 	return -1;
 
@@ -531,14 +561,9 @@ vector<Token> Fold(vector<Token> &token_list){
 				}
 				if(kh==0){
 					if(arg->size()>0){
-						arg_list->push_back(Token("element","",token.line,token.byte,Fold(*arg)));
+						arg_list->push_back(Token("exp","",token.line,token.byte,Fold(*arg)));
 					}
 					break;
-				}
-				else if(token.Value==","&&kh==1){
-					arg_list->push_back(Token("element","",token.line,token.byte,Fold(*arg)));
-					delete arg;
-					arg=new vector<Token>();
 				}
 				else{
 					arg->push_back(token);
@@ -548,7 +573,7 @@ vector<Token> Fold(vector<Token> &token_list){
 				error_list.push_back("错误："+Position(line,byte)+" 数组索引缺少']'");
 				break;
 			}
-			temp.push_back(Token("list","",line,byte,*arg_list));
+			temp.push_back(Token("op","@",line,byte,*arg_list));
 			delete arg_list;
 			delete arg;
 		}
@@ -562,20 +587,46 @@ vector<Token> Fold(vector<Token> &token_list){
 	return temp;
 }
 
-void Parse_exp(vector<Token> &exp){
+string encodeConst(int type){
+	string temp;
+	switch(type){
+	case 0:
+		temp="int";
+	break;
+	case 1:
+		temp="float";
+	break;
+	case 2:
+		temp="bool";
+	break;
+	case 3:
+		temp="str";
+	break;
+	}
+	return "add_const_"+temp;
+}
+
+void Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_global){
 	vector<Token> s;
-	int i=0,max=exp.size();
+	int i=0,max=exp.size(),x,m;
 	Token op1,op2,op;
+	string next_type,is_ref;
+	map<string,var>::iterator iter;
 	for(;i<max;i++){
 		op=exp[i];
+		if(op.Type==""){
+			break;
+		}
 		if(op.Type=="op"){
 			op2=s.back();
 			s.pop_back();
 			if(op.Value=="!"){
+				next_type=op2.Type;
 				out.push_back(Ins("not"));
 			}
 			else{
 				op1=s.back();
+				next_type=op1.Type;
 				s.pop_back();
 				if(op.Value=="+"){
 					out.push_back(Ins("add"));
@@ -593,12 +644,55 @@ void Parse_exp(vector<Token> &exp){
 					out.push_back(Ins("mod"));
 				}
 				else if(op.Value=="@"){
-					out.push_back(Ins("index"));
+					if(is_set&&exp[i+1].Type==""){
+						out.push_back(Ins("set_index"));
+					}
+					else{
+						out.push_back(Ins("index"));
+					}
+				}
+				else if(op.Value=="."){
+					//
 				}
 			}
+			s.push_back(Token(next_type,"",op2.line,op2.byte,vector<Token>()));
 		}
 		else{
-			s.push_back(exp[i]);
+			if(op.Type=="var"){
+				iter=domain.find(op.Value);
+				if(iter==domain.end()){
+					error_list.push_back("错误："+Position(op.line,op.byte)+" 变量'"+op.Value+"'未在作用域中定义");
+					break;
+				}
+				else{
+					if(is_set){
+						is_ref="t";
+					}
+					else{
+						is_ref="f";
+					}
+					if(exp[i+1].Value!="."){
+						op.Type=iter->second.type;
+						if(is_global){
+							out.push_back(Ins("push_var_global",Tostring(iter->second.id),is_ref));
+						}
+						else{
+							out.push_back(Ins("push_var_local",Tostring(iter->second.id),is_ref));
+						}
+					}
+				}
+			}
+			else{
+				x=0;
+				m=consts.size();
+				for(;x<m;x++){
+					if(consts[x]==op){
+						break;
+					}
+				}
+				out.push_back(Ins("push_const",Tostring(x)));
+				s.push_back(op);
+			}
 		}
 	}
 }
@@ -608,13 +702,32 @@ void Grammar_check(vector<Token> &tokens){
 	int max=tokens.size();
 	Token token;
 	bool err=false;
-	int tab=0;
-	int line,byte;
+	int tab=0,last_tab=0;
+	int line,byte,m;
+	map<string,var> domain;
+	domains.push_back(map<string,var>());
+	var_num.push_back(0);
 	for(;i<max;i++){
+		if(tokens[i].Value[0]=='\n'){
+			continue;
+		}
 		tab=0;
 		while(tokens[i].Value[0]=='\t'){
 			tab++;
 			i++;
+		}
+		m=domains.size();
+		if(tab>m-1){
+			for(;m<tab;m++){
+				domains.push_back(domains[m-1]);
+				var_num.push_back(0);
+			}
+		}
+		else if(tab!=last_tab){
+			for(;tab<last_tab;last_tab--){
+				domains.pop_back();
+				var_num.pop_back();
+			}
 		}
 		token=tokens[i];
 		line=token.line;
@@ -640,50 +753,78 @@ void Grammar_check(vector<Token> &tokens){
 				}
 				if(exp.size()==0){
 					error_list.push_back("错误："+Position(line,byte)+" 表达式不能为空");
-					break; 
-				} 
+					break;
+				}
 				exp=Trans_exp(exp);
+				exp.push_back(Token());
+				Parse_exp(exp,false,domains[tab],tab==0);
+				if(!error_list.empty()){
+					break;
+				}
 				out.push_back(Ins("print"));
 			}
 		}
+		last_tab=tab;
 	}
-} 
+}
 
-void Compile_file(string File_name){
+void Compile_file(string File_name,char* temp_name){
 	FILE *fp=fopen(File_name.c_str(),"r");
 	if(fp==NULL){
 		cout<<"错误：文件"<<File_name<<"不存在\n";
 		return;
 	}
 	vector<Token> token_list;
-	token_list.push_back(Token("break","\n",0,0));
-	token_list.push_back(Token("break","\n",0,0));
 	vector<string> temp;
 	Parse_Token(fp,&token_list);
+	int m=token_list.size();
+	Token token;
+	for(int i=0;i<m;i++){
+		if(Is_in_s(ct,&token_list[i].Type,4)){
+			token=token_list[i];
+			int x=0,max=consts.size();
+			bool on=true;
+			for(;x<max;x++){
+				if(consts[x]==token){
+					on=false;
+					break;
+				}
+			}
+			if(on){
+				consts.push_back(token);
+				if(token.Type=="int"){
+					out.push_back(Ins(encodeConst(Lint),token.Value));
+				}
+				else if(token.Type=="float"){
+					out.push_back(Ins(encodeConst(Lfloat),token.Value));
+				}
+				else if(token.Type=="bool"){
+					out.push_back(Ins(encodeConst(Lbool),token.Value));
+				}
+				else if(token.Type=="string"){
+					out.push_back(Ins(encodeConst(Lstring),token.Value));
+				}
+			}
+		}
+	}
 	fclose(fp);
 	if(error_list.empty()){
 		token_list=Fold(token_list);
 	}
-	Token token=token_list.back();
+	token=token_list.back();
 	token_list.push_back(Token("break","\n",token.line+1,0));
 	if(error_list.empty()){
 		last_func=false;
 		Grammar_check(token_list);
 		//语法解析
-	}/*
+	}
 	if(error_list.empty()){
-		out+=itoh(reg_max+1,2)+itoh(const_list.size(),4)+itoh(global.size()-INNER_FUNCTION,4);
-		for(int i=0;i<consts.size();i++){
-			out+=Encode_const(consts[i]);
+		fp=fopen(temp_name,"w+");
+		for(int i=0;i<out.size();i++){
+			fputs(out[i].encode().c_str(),fp);
 		}
 		fclose(fp);
-		fp=fopen("a.lapc","w+");
-		fputs(out.c_str(),fp);
-		for(int i=0;i<out_ins.size();i++){
-			fputs(out_ins[i].c_str(),fp);
-		}
-		fclose(fp);
-	}*/
+	}
 }
 
 //
@@ -696,7 +837,7 @@ int main(int argc,char* argv[]){
 		}
 		else{
 			//string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0
-			Compile_file(argv[1]);
+			Compile_file(argv[1],argv[2]);
 			if(error_list.size()>0){
 				printf("在%s：\n",argv[1]);
 				for(int i=0;i<error_list.size();i++){
