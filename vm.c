@@ -296,7 +296,7 @@ void PushConst(LapState *env){
 
 void PushVar(LapState *env,int sign){
     char** ins=env->Commands[env->PC];
-    int *i=ParseInt(ins[1]),s=StringCmp(ins[2],"true");
+    int *i=ParseInt(ins[1]),s=ins[2][0]=='t';
     ExtendStack(env);
     switch(sign){
 	case 'l':
@@ -794,12 +794,6 @@ void Dlsym(LapState *env){
 	LapObject *op1=env->Stack[env->Index];
 	char* str=(char*)op2->Value;
 	void* temp=GetProcAddress(op1->Value,str);//函数的Size必须写明参数 不支持动态参数
-	char* onstr=ConcatStr(str,"Type",op2->Size,4);
-	int type=*(int*)GetProcAddress(op1->Value,onstr);
-	free(onstr);
-	onstr=ConcatStr(str,"Size",op2->Size,4);
-	int size=*(int*)GetProcAddress(op1->Value,onstr);
-	free(onstr);
 	if(temp==NULL){
 		env->Err=7;
 		env->Onstr=op2->Value;
@@ -807,7 +801,12 @@ void Dlsym(LapState *env){
 		return;
 	}
 	FreeObject(op2);
-	env->Stack[env->Index]=CreateObject(type,size,temp);
+	char** ins=env->Commands[env->PC];
+	int *t=ParseInt(ins[1]),type=*t;
+	free(t);
+	t=ParseInt(ins[2]);
+	env->Stack[env->Index]=CreateObject(type,*t,temp);
+	free(t);
 	env->Index++;
 }
 
