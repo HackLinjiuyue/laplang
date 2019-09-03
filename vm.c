@@ -63,7 +63,7 @@ char** SplitIns(char* str){
 		else{
 			if(index==max){
 				max+=20;
-				onstr=(char*)realloc(onstr,sizeof(char[max]));
+				onstr=(char*)realloc(onstr,sizeof(char[max+3]));
 				memset(onstr+max-20,0,20);
 			}
 			onstr[index]=str[i];
