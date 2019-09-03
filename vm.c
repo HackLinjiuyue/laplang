@@ -279,6 +279,9 @@ void AddConst(LapState *env,char type){
 		if(StringCmp(env->Commands[env->PC][1],"false")){
 			*(int*)obj->Value=0;
 		}
+		else{
+			*(int*)obj->Value=1;
+		}
 		env->ConstVars[env->ConstNum]=obj;
 	break;
 	}
@@ -598,7 +601,7 @@ void Jump(LapState *env,int sign){
 		}
 	}
 	else{
-		if(!(int*)env->Stack[0]->Value){
+		if(!*(int*)env->Stack[0]->Value){
 			line=ParseInt(env->Commands[env->PC][1]);
 			env->PC=*line-2;
 			free(line);
