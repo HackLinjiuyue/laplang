@@ -1,4 +1,5 @@
 #include<windows.h>
+#include<math.h>
 
 #include "CLap.h"
 
@@ -28,7 +29,7 @@ long long QuickPower(long long x,long long y)
 
 LapObject *args=NULL;
 
-int StrLen(char* str){
+int StrLen(const char* str){
 	int i=0;
 	while(str[i]!=0){
 		i++;
