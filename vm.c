@@ -742,7 +742,7 @@ void Fwrite(LapState *env){
 	LapObject *op2=env->Stack[env->Index];
 	env->Index--;
 	LapObject *op1=env->Stack[env->Index];
-	fputs((FILE*)op2->Value,(char*)op1->Value);
+	fputs((char*)op2->Value,(FILE*)op1->Value);
 	free(op1);
 	FreeObject(op2);
 }
