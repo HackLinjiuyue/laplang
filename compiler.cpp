@@ -30,7 +30,7 @@ class var{
 
 const string Symbols[31]={")","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","{","}","==",".","!","//","/*","*/","[","]",",","&","|"};
 
-const string KeyWords[13]={"interface","function","return","if","break","continue","when","class","else","local","global","set","call"};
+const string KeyWords[14]={"interface","function","return","if","break","continue","when","class","else","local","global","set","call","delete"};
 
 const string Basic_type[10]={"int","float","bool","string","void","Array","File","DLLHandle","Object","NativeFunction"};
 
@@ -53,6 +53,8 @@ const string ct[4]={"int","float","bool","string"};
 vector<string> error_list;
 
 vector<int> last_p;
+
+string ftype="";
 
 bool bk=0,is_std=true;
 
@@ -289,7 +291,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			linshi="";
 			continue;
 		}
-		else if(Is_in_s(KeyWords,&onstr,13)){
+		else if(Is_in_s(KeyWords,&onstr,14)){
 			last_type="keyword";
 			if(onstr=="function"){
 				is_func=true;
@@ -668,6 +670,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 		if(op.Type==""){
 			break;
 		}
+		if(op.Type=="tab"){
+			continue;
+		}
 		if(op.Type=="op"){
 			op2=s.back();
 			s.pop_back();
@@ -764,43 +769,49 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 		}
 		else{
 			if(op.Type=="var"){
-				iter=domain.find(op.Value);
-				if(iter==domain.end()){
-					error_list.push_back("错误："+Position(op.line,op.byte)+" 变量'"+op.Value+"'未在作用域中定义");
-					return "";
+				if(op.Value=="null"){
+					s.push_back(Token("Object","null",op.line,op.byte));
+					out.push_back(Ins("push_null"));
 				}
 				else{
-					if(is_set){
-						is_ref="true";
+					iter=domain.find(op.Value);
+					if(iter==domain.end()){
+						error_list.push_back("错误："+Position(op.line,op.byte)+" 变量'"+op.Value+"'未在作用域中定义");
+						return "";
 					}
 					else{
-						is_ref="f";
-					}
-					if(iter->second.type=="Array"||iter->second.type=="File"){
-						is_ref="true";
-					}
-					if(i<exp.size()-1){
-						if(exp[i+1].Value!="."){
-							op.Type=iter->second.type;
-							if(is_global){
-								out.push_back(Ins("push_var_global",Tostring(iter->second.id),is_ref));
-							}
-							else{
-								out.push_back(Ins("push_var_local",Tostring(iter->second.id),is_ref));
-							}
-						}
-					}
-					else{
-						if(is_global){
-							out.push_back(Ins("push_var_global",Tostring(iter->second.id),is_ref));
+						if(is_set){
+							is_ref="true";
 						}
 						else{
-							out.push_back(Ins("push_var_local",Tostring(iter->second.id),is_ref));
+							is_ref="f";
 						}
+						if(iter->second.type=="Array"||iter->second.type=="File"){
+							is_ref="true";
+						}
+						if(i<exp.size()-1){
+							if(exp[i+1].Value!="."){
+								op.Type=iter->second.type;
+								if(is_global){
+									out.push_back(Ins("push_var_global",Tostring(iter->second.id)));
+								}
+								else{
+									out.push_back(Ins("push_var_local",Tostring(iter->second.id)));
+								}
+							}
+						}
+						else{
+							if(is_global){
+								out.push_back(Ins("push_var_global",Tostring(iter->second.id)));
+							}
+							else{
+								out.push_back(Ins("push_var_local",Tostring(iter->second.id)));
+							}
+						}
+						is_ref="false";
 					}
-					is_ref="false";
+					s.push_back(Token(iter->second.type,op.Value,op.line,op.byte));
 				}
-				s.push_back(Token(iter->second.type,op.Value,op.line,op.byte));
 			}
 			else if(op.Type=="callbox"){//动参不进行安全检查
 				Fiter=functions.find(op.Value);
@@ -854,6 +865,12 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					else if(op.Value=="File"){
 						out.push_back(Ins("open_file"));
 					}
+					else if(op.Value=="IsNull"){
+						out.push_back(Ins("is_null"));
+					}
+					else if(op.Value=="Opposite"){
+						out.push_back(Ins("ops"));
+					}
 					else if(op.Value=="Fgetc"){
 						out.push_back(Ins("fgetc"));
 					}
@@ -880,6 +897,12 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					else if(op.Value=="PopValue"){
 						out.push_back(Ins("arr_pop"));
+					}
+					else if(op.Value=="InsertValue"){
+						out.push_back(Ins("arr_insert"));
+					}
+					else if(op.Value=="RemoveValue"){
+						out.push_back(Ins("arr_remove"));
 					}
 					else if(op.Value=="Argv"){
 						out.push_back(Ins("get_command_arg"));
@@ -942,9 +965,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 
 void Import(string path,string fimport);
 
-int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=map<string,var>(),int start=0,int tab_num=0,int jumpto=0){
+int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=map<string,var>(),int start=0,int tab_num=0,int jumpto=0,bool inner_loop=false){
 	ssize++;
-	int i=start,posi;
+	int i=start,posi,last_i;
 	int max=tokens.size();
 	Token token,next,type,o;
 	bool err=false,result;
@@ -955,6 +978,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 	vector<Token> exp=vector<Token>();
 	map<string,var>::iterator iter;
 	string next_type,l,last_word,rt_type;
+	bool is_return=false;
 	for(;i<max;i++){
 		if(tokens[i].Value[0]=='\n'){
 			continue;
@@ -1074,7 +1098,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					}
 					i++;
 					next=tokens[i];
-					if(Is_in_s(KeyWords,&next.Value,13)){
+					if(Is_in_s(KeyWords,&next.Value,14)){
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 函数名不能为关键字");
 						break;
 					}
@@ -1108,11 +1132,18 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						}
                     }
                     functions.insert(pair<string,function>(token.Value,function(out.size()+2,false,next_type,farg)));
+                    ftype=next_type;
                     i++;
                     out.push_back(Ins("jump"));
                     last_pos=out.size()-1;
-                    i=Grammar_check(tokens,true,give,i,0,jumpto)-1;
+                    last_i=i;
+                    i=Grammar_check(tokens,true,give,i,0,jumpto,inner_loop)-1;
+                    ftype="";
                     if(!error_list.empty()){
+						break;
+                    }
+                    if(i==last_i){
+						error_list.push_back("错误："+Position(token.line,token.byte)+" 函数必须实现");
 						break;
                     }
                     out[last_pos].arg1=Tostring(out.size()+1);
@@ -1133,7 +1164,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					}
 					i++;
 					next=tokens[i];
-					if(Is_in_s(KeyWords,&next.Value,13)){
+					if(Is_in_s(KeyWords,&next.Value,14)){
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 接口函数名不能为关键字");
 						break;
 					}
@@ -1211,7 +1242,43 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						break;
                     }
 			}
+			else if(token.Value=="continue"){
+				if(!inner_loop){
+					error_list.push_back("错误："+Position(line,byte)+" 'continue'语句必须出现在循环体中");
+					return i;
+				}
+				out.push_back(Ins("jump",Tostring(jumpto-1)));
+			}
+			else if(token.Value=="delete"){
+				if(inner_loop){
+					error_list.push_back("错误："+Position(line,byte)+" 'delete'语句不能在循环体中出现");
+					return i;
+				}
+				i++;
+				token=tokens[i];
+				if(token.Type!="var"){
+					error_list.push_back("错误："+Position(line,byte)+" 被删除的必须为变量");
+					return i;
+				}
+				iter=domains[0].find(token.Value);
+				if(iter==domains[0].end()){
+					iter=give.find(token.Value);
+					if(iter==give.end()){
+						error_list.push_back("错误："+Position(line,byte)+" 变量'"+token.Value+"'未在子作用域中定义");
+						return i;
+					}
+				}
+				else if(tab){
+					error_list.push_back("错误："+Position(line,byte)+" 全局变量'"+token.Value+"'不能在子作用域中被删除");
+					return i;
+				}
+				out.push_back(Ins("delete",Tostring(iter->second.id)));
+			}
 			else if(token.Value=="return"){
+				if(!tab){
+					error_list.push_back("错误："+Position(line,byte)+" 'return'语句必须出现在函数中");
+					break;
+				}
 				i++;
 				exp=vector<Token>();
 				for(;i<max;i++){
@@ -1222,19 +1289,27 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					if(token.Type=="keyword"){
 						err=true;
 						error_list.push_back("错误："+Position(line,byte)+" 表达式中不能出现关键字");
-						break;
+						return i;
 					}
 					exp.push_back(token);
 				}
 				if(err){
-					break;
+					return i;
+				}
+				if(exp.empty()&&ftype!="void"){
+					error_list.push_back("错误："+Position(line,byte)+" 表达式不能为空");
+					return i;
 				}
 				if(exp.size()!=0){
+					if(ftype=="void"){
+						error_list.push_back("错误："+Position(line,byte)+" 表达式必须为空");
+						return i;
+					}
 					exp=Trans_exp(exp);
 					exp.push_back(Token());
 					Parse_exp(exp,false,domains[tab],tab==0);
 					if(!error_list.empty()){
-						break;
+						return i;
 					}
 				}
 				out.push_back(Ins("return"));
@@ -1273,7 +1348,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
                 last_pos=out.size();
                 out.push_back(Ins("false_jump"));
-				i=Grammar_check(tokens,innerFX,domains[tab],i,tab,jumpto)-1;
+				i=Grammar_check(tokens,innerFX,domains[tab],i,tab,jumpto,inner_loop)-1;
                     if(!error_list.empty()){
 						break;
                     }
@@ -1291,7 +1366,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					break;
 				}
 				i++;
-				i=Grammar_check(tokens,innerFX,domains[tab],i,tab,jumpto)-1;
+				i=Grammar_check(tokens,innerFX,domains[tab],i,tab,jumpto,inner_loop)-1;
                     if(!error_list.empty()){
 						break;
                     }
@@ -1331,7 +1406,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
                 last_pos=out.size();
                 out.push_back(Ins("false_jump"));
-				i=Grammar_check(tokens,innerFX,domains[tab],i,tab,out.size()+2)-1;
+				i=Grammar_check(tokens,innerFX,domains[tab],i,tab,out.size()+2,true)-1;
                     if(!error_list.empty()){
 						break;
                     }
@@ -1348,13 +1423,13 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 			}
 			else if(token.Value=="break"){
-				if(jumpto==0){
-					error_list.push_back("错误："+Position(line,byte)+" break必须位于循环体中");
+				if(!inner_loop){
+					error_list.push_back("错误："+Position(line,byte)+" 'break'语句必须出现在循环体中");
 					return i;
 				}
 				bk=true;
 			}
-			else{
+			else if(!inner_loop){
 				i++;
 				type=tokens[i];
 				if(!Is_in_s(Basic_type,&type.Value,10)){
@@ -1363,7 +1438,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				i++;
 				next=tokens[i];
-				if(Is_in_s(KeyWords,&next.Value,13)){
+				if(Is_in_s(KeyWords,&next.Value,14)){
 					error_list.push_back("错误："+Position(next.line,next.byte)+" 变量名不能为关键字");
 					break;
 				}
@@ -1373,11 +1448,15 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					domains[tab].insert(pair<string,var>(next.Value,var(posi,type.Value)));
 					result=iter==domains[tab].end();
 				}
-				else{
+				else if(!innerFX){
 					iter=domains[0].find(next.Value);
 					posi=var_num[0]++;
 					domains[tab].insert(pair<string,var>(next.Value,var(posi,type.Value)));
 					result=iter==domains[0].end();
+				}
+				else{
+					error_list.push_back("错误："+Position(line,byte)+" 全局变量'"+next.Value+"'不能在函数中定义");
+					break;
 				}
 				if(!result){
 					error_list.push_back("错误："+Position(line,byte)+" 变量'"+next.Value+"'已在此作用域中定义");
@@ -1421,6 +1500,10 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				out.push_back(Ins("store_var_"+type.Type,Tostring(posi)));
 			}
+			else{
+				error_list.push_back("错误："+Position(token.line,token.byte)+" 循环体中不能定义变量");
+				break;
+			}
 			last_word=l;
 		}
 		else{
@@ -1432,6 +1515,9 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 		last_tab=tab;
 	}
 	ssize--;
+	if(innerFX&&tab==1&&!is_return){
+		error_list.push_back("错误："+Position(token.line,token.byte)+" 函数必须拥有'return'语句");
+	}
 	return i;
 }
 
@@ -1543,7 +1629,7 @@ int main(int argc,char* argv[]){
 	if(argc>1){
 		string on=string(argv[1]);
 		if(on=="-h"){
-			printf("Lapc by hacklinjiuyue v0.74a\n--------------------\n  lapc -h for help\n  lapc x.lap to compile the file\n--------------------\n");
+			printf("Lapc by hacklinjiuyue v1.2a\n--------------------\n  lapc -h for help\n  lapc x.lap to compile the file\n--------------------\n");
 		}
 		else{
 			//string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0
