@@ -300,26 +300,14 @@ void PushConst(LapState *env){
 
 void PushVar(LapState *env,int sign){
     char** ins=env->Commands[env->PC];
-    int *i=ParseInt(ins[1]),s=ins[2][0]=='t';
+    int *i=ParseInt(ins[1]);
     ExtendStack(env);
     switch(sign){
 	case 'l':
-		if(s){
-			env->Stack[env->Index]=env->VarStacks[env->StackPC][*i];
-			env->Stack[env->Index]->Protect=1;
-		}
-		else{
-			env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[env->StackPC][*i]);
-		}
+		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[env->StackPC][*i]);
 		break;
 	case 'g':
-		if(s){
-			env->Stack[env->Index]=env->VarStacks[0][*i];
-			env->Stack[env->Index]->Protect=1;
-		}
-		else{
-			env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[0][*i]);
-		}
+		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[0][*i]);
 		break;
     }
     env->Index++;
@@ -553,10 +541,44 @@ void Not(LapState *env){
 	op1->Type=3;
 }
 
+void IsNull(LapState *env){
+	LapObject *op1=env->Stack[env->Index-1];
+	int *p=malloc(sizeof(int));
+	if(op1==NULL){
+		*p=1;
+	}
+	else{
+		*p=0;
+	}
+	env->Stack[env->Index-1]=CreateObject(3,0,p);
+}
+
+void Ops(LapState *env){
+	LapObject *op1=env->Stack[env->Index-1];
+	int type=op1->Type;
+	switch(type){
+	case 0:
+		*(int*)op1->Value=-*(int*)op1->Value;
+		break;
+	case 1:
+		*(double*)op1->Value=-*(double*)op1->Value;
+		break;
+	}
+}
+
 void Print(LapState *env){
 	env->Index--;
-    PrintData(env->Stack[env->Index]);
-    FreeObject(env->Stack[env->Index]);
+	LapObject *obj=NULL,*op1=env->Stack[env->Index];
+	if(op1!=NULL){
+		if(op1->Type>3){
+			obj=CreateObjectFromObject(op1);
+		}
+		else{
+			obj=op1;
+		}
+	}
+    PrintData(obj);
+    FreeObject(obj);
     env->Stack[env->Index]=NULL;
 }
 
@@ -847,6 +869,53 @@ void ArrayFill(LapState *env){//配合引用使用
 	FreeObject(op2);
 }
 
+void ArrayInsert(LapState *env){//配合引用使用
+	env->Index--;
+	LapObject *op3=env->Stack[env->Index];
+	env->Index--;
+	LapObject *op2=env->Stack[env->Index];
+	env->Index--;
+	LapObject *op1=env->Stack[env->Index];
+	if(op1->Size+1>=op1->MaxSize){
+		op1->MaxSize+=8;
+		int m=op1->MaxSize,k=op1->Size;
+		op1->Property=(LapObject**)realloc(op1->Property,sizeof(LapObject*[m]));
+		for(;k<m;k++){
+			op1->Property[k]=NULL;
+		}
+	}
+    int index=*(int*)op2->Value,max=op1->Size;
+    if(index<0||index>op1->Size-1){
+		env->Err=2;
+		return;
+    }
+    for(;max>index;max--){
+		op1->Property[max]=op1->Property[max-1];
+    }
+    op1->Property[index]=CreateObjectFromObject(op3);
+    op1->Size++;
+	FreeObject(op2);
+	FreeObject(op3);
+}
+
+void ArrayRemove(LapState *env){//配合引用使用
+	env->Index--;
+	LapObject *op2=env->Stack[env->Index];
+	env->Index--;
+	LapObject *op1=env->Stack[env->Index];
+    int index=*(int*)op2->Value,max=op1->Size-1;
+    if(index<0||index>op1->Size-1){
+		env->Err=2;
+		return;
+    }
+    FreeObject(op1->Property[index]);
+    for(;max>index;max--){
+		op1->Property[max-1]=op1->Property[max];
+    }
+    op1->Size--;
+	FreeObject(op2);
+}
+
 void Dlopen(LapState *env){//动态库系列全部结合引用使用
 	env->Index--;
 	LapObject *op1=env->Stack[env->Index];
@@ -924,6 +993,13 @@ void PushArray(LapState *env){
 	LapObject *op2=CreateObject(4,*(int*)op1->Value,NULL);
 	FreeObject(op1);
     env->Stack[env->Index-1]=op2;
+}
+
+void Delete(LapState *env){
+	int *index=ParseInt(env->Commands[env->PC][1]);
+	FreeObject(env->VarStacks[env->StackPC][*index]);
+	env->VarStacks[env->StackPC][*index]=NULL;
+	free(index);
 }
 
 
@@ -1006,8 +1082,18 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(StringCmp(ins[0],"not")){
 		Not(env);
     }
+    else if(StringCmp(ins[0],"ops")){
+		Ops(env);
+    }
     else if(StringCmp(ins[0],"print")){
 		Print(env);
+    }
+    else if(StringCmp(ins[0],"delete")){
+		Delete(env);
+    }
+    else if(StringCmp(ins[0],"push_null")){
+		ExtendStack(env);
+		env->Index++;
     }
     else if(StringCmp(ins[0],"true_jump")){//1 int for line
 		Jump(env,1);
@@ -1019,6 +1105,9 @@ void DoIns(LapState *env){//use ' ' to separate parms
 		int *line=ParseInt(ins[1]);
 		env->PC=*line-2;
 		free(line);
+    }
+    else if(StringCmp(ins[0],"is_null")){
+		IsNull(env);
     }
     else if(StringCmp(ins[0],"get_command_arg")){
 		GetCommandArg(env);
@@ -1079,6 +1168,12 @@ void DoIns(LapState *env){//use ' ' to separate parms
     }
     else if(StringCmp(ins[0],"arr_pop")){
 		ArrayPop(env);
+    }
+    else if(StringCmp(ins[0],"arr_insert")){
+		ArrayInsert(env);
+    }
+    else if(StringCmp(ins[0],"arr_remove")){
+		ArrayRemove(env);
     }
     else if(StringCmp(ins[0],"arr_fill")){
 		ArrayFill(env);
@@ -1161,6 +1256,8 @@ int main(int argc,char* argv[]){
 			break;
 		}
 	}
+	args->Ref=0;
 	FreeObject(args);
 	DeleteState(env);
+	//system("pause");
 }
