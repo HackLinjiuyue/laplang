@@ -166,7 +166,6 @@ void PrintData(LapObject *obj){
 void FreeObject(LapObject *obj){
 	if(obj!=NULL){
 		if(!obj->Ref){
-									//system("pause");
 			int type=obj->Type,size=obj->Size,i=0;
 			if(obj->Value!=NULL){
 				switch(type){
@@ -182,11 +181,14 @@ void FreeObject(LapObject *obj){
 				case 3:
 				free((int*)obj->Value);
 				break;
-				case 4:
-				for(;i<size;i++){
-					FreeObject(obj->Property[i]);
 				}
-				break;
+			}
+			else{
+				if(obj->Type==4){
+					for(;i<size;i++){
+					FreeObject(obj->Property[i]);
+					}
+					free(obj->Property);
 				}
 			}
 			free(obj);

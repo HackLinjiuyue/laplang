@@ -616,6 +616,9 @@ void StoreVar(LapState *env,int sign){
         env->VarStacks[0][*i]=CreateObjectFromObject(env->Stack[0]);
 		break;
     }
+	if(env->Stack[0]->Type>3){
+		env->Stack[0]->Ref++;
+	}
     env->Index--;
     FreeObject(env->Stack[0]);
     env->Stack[0]=NULL;
@@ -986,10 +989,10 @@ void PushEmptyStr(LapState *env){
 void PushArray(LapState *env){
     ExtendStack(env);
 	LapObject *op1=env->Stack[env->Index-1];
-	/*if(*(int*)op1->Value<1){
+	if(*(int*)op1->Value<0){
 		env->Err=9;
 		return;
-	}*/
+	}
 	LapObject *op2=CreateObject(4,*(int*)op1->Value,NULL);
 	FreeObject(op1);
     env->Stack[env->Index-1]=op2;
@@ -1252,7 +1255,7 @@ int main(int argc,char* argv[]){
 			printf("Err:Index item is null!\n");
 			break;
 		case 9:
-			printf("Err:Array length can not be zero!\n");
+			printf("Err:Array length can not be less than zero!\n");
 			break;
 		}
 	}
