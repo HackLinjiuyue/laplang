@@ -45,17 +45,13 @@ LapObject *CreateObject(int type,int size,void* value){
 		temp->Value=malloc(sizeof(double));
 		break;
 		case 2:
-		temp->Value=malloc(sizeof(char[size+3]));
-		memset(temp->Value,0,sizeof(char[size+3]));
+		temp->Value=calloc(size+3,sizeof(char));
 		break;
 		case 3:
 		temp->Value=malloc(sizeof(int));
 		break;
 		case 4:
-		temp->Property=(LapObject**)malloc(sizeof(LapObject*[size]));
-		for(;i<size;i++){
-			temp->Property[i]=NULL;
-		}
+		temp->Property=(LapObject**)calloc(size,sizeof(LapObject*));
 		temp->Protect=1;
 		break;
 		default:
@@ -111,7 +107,7 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 
 char* ConcatStr(char* s1,char* s2,int l1,int l2){
 	int type=l1+l2;
-	char* onstr=(char*)malloc(sizeof(char[type+3]));
+	char* onstr=(char*)calloc(type+3,sizeof(char));
 	memset(onstr,0,sizeof(char[type+3]));
 	strcpy(onstr,s1);
 	strcpy(onstr+l1,s2);

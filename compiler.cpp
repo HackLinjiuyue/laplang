@@ -30,7 +30,7 @@ class var{
 
 const string Symbols[31]={")","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","{","}","==",".","!","//","/*","*/","[","]",",","&","|"};
 
-const string KeyWords[14]={"interface","function","return","if","break","continue","when","class","else","local","global","set","call","delete"};
+const string KeyWords[14]={"interface","function","return","if","break","continue","when","import","else","local","global","set","call","delete"};
 
 const string Basic_type[10]={"int","float","bool","string","void","Array","File","DLLHandle","Object","NativeFunction"};
 
@@ -907,6 +907,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					else if(op.Value=="Argv"){
 						out.push_back(Ins("get_command_arg"));
 					}
+					else if(op.Value=="Execute"){
+						out.push_back(Ins("exec"));
+					}
 					else if(op.Value=="DLLOpen"){
 						out.push_back(Ins("dlopen"));
 					}
@@ -1007,14 +1010,18 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				var_num.pop_back();
 			}
 		}
-		if(tab==tab_num){
+		if(tab<=tab_num){
 			if(bk){
 				bk=i;
 			}
 			i-=tab;
-			break;
+			ssize--;
+			return i;
 		}
 		token=tokens[i];
+		if(token.Value=="\n"){
+			continue;
+		}
 		line=token.line;
 		byte=token.byte;
 		if(token.Type=="keyword"){
@@ -1149,6 +1156,10 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
                     out[last_pos].arg1=Tostring(out.size()+1);
 			}
 			else if(token.Value=="interface"){
+					if(ssize>1){
+						error_list.push_back("错误："+Position(token.line,token.byte)+" 接口函数不允许定义在其他指令中");
+						return i;
+					}
 					farg=vector<var>();
 					g=map<string,var>();
 					if(innerFX){
@@ -1312,6 +1323,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						return i;
 					}
 				}
+				is_return=true;
 				out.push_back(Ins("return"));
 			}
 			else if(token.Value=="if"){
@@ -1428,6 +1440,24 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					return i;
 				}
 				bk=true;
+			}
+			else if(token.Value=="import"){
+				if(ssize>1){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 'import'语句必须位于全局作用域");
+					return i;
+				}
+				i++;
+				token=tokens[i];
+				if(token.Type!="string"){
+					error_list.push_back("错误："+Position(line,byte)+" 'import'语句必须使用字符串参数");
+					return i;
+				}
+				ssize--;
+				Import(token.Value,"");
+				ssize++;
+				if(!error_list.empty()){
+					return i;
+				}
 			}
 			else if(!inner_loop){
 				i++;
@@ -1620,7 +1650,15 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false){
 }
 
 void Import(string path,string fimport=""){
+	path+=".lap";
 	Compile_file(path,NULL,true);
+	if(error_list.size()>0){
+		printf("在%s：\n",path.c_str());
+		for(int i=0;i<error_list.size();i++){
+			printf("%s\n",error_list[i].c_str());
+			error_list.pop_back();
+		}
+	}
 }
 
 //
@@ -1629,13 +1667,13 @@ int main(int argc,char* argv[]){
 	if(argc>1){
 		string on=string(argv[1]);
 		if(on=="-h"){
-			printf("Lapc by hacklinjiuyue v1.2a\n--------------------\n  lapc -h for help\n  lapc x.lap to compile the file\n--------------------\n");
+			printf("Lapc by hacklinjiuyue v1.3a\n--------------------\n  lapc -h for help\n  lapc x.lap x.lapm to compile the file\n--------------------\n");
 		}
 		else{
 			//string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0
 			domains.push_back(map<string,var>());
 			var_num.push_back(0);
-			Import("./builtin.laph");
+			Import("./builtin");
 			is_std=false;
 			/*
 			if(error_list.size()>0){

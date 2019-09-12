@@ -9,6 +9,7 @@ typedef struct{
 	LapObject** ConstVars;
 	char*** Commands;
 	char* Onstr;
+	LapObject* Argv;
 	int Index,ConstNum,*VarNum,MaxConst,*MaxVar,MaxIndex,PC,*PCStack,MaxPC,TruePC,Err,StackPC,MaxStackPC;
 }LapState;
 
@@ -46,18 +47,17 @@ void ExtendStack(LapState *env){
 
 char** SplitIns(char* str){
 	int len=StrLen(str)-1;
-    char** temp=(char**)malloc(sizeof(char*[3])),*onstr=(char*)malloc(sizeof(char[20]));
-    memset(onstr,0,sizeof(char[20]));
+    char** temp=(char**)calloc(3,sizeof(char*)),*onstr=(char*)calloc(20,sizeof(char));
     int i=0,index=0,k=0,max=20;
     for(;i<len;i++){
 		if(str[i]==' '){
 			index=0;
 			temp[k]=onstr;
 			if(k==2){
+				onstr=NULL;
 				break;
 			}
-			onstr=(char*)malloc(sizeof(char[5]));
-			memset(onstr,0,5*sizeof(char));
+			onstr=(char*)calloc(5,sizeof(char));
 			max=4;
 			k++;
 		}
@@ -71,23 +71,24 @@ char** SplitIns(char* str){
 			index++;
 		}
     }
-    if(onstr[0]!=0){
+    if(onstr!=NULL){
 		temp[k]=onstr;
     }
     return temp;
 }
 
-LapState *InitVM(char* path){
+LapState *InitVM(char* path,LapObject* arg){
 	FILE *fp=fopen(path,"r+");
 	if(fp==NULL){
 		printf("File %s Not Found\n",path);
 		return NULL;
 	}
 	LapState *temp=(LapState*)malloc(sizeof(LapState));
-	temp->Stack=(LapObject**)malloc(sizeof(LapObject*[20]));
+	temp->Argv=arg;
+	temp->Stack=(LapObject**)calloc(20,sizeof(LapObject*));
 	temp->ConstVars=(LapObject**)malloc(sizeof(LapObject*[20]));
     temp->VarStacks=(LapObject***)malloc(sizeof(LapObject**[1]));
-    temp->VarStacks[0]=(LapObject**)malloc(sizeof(LapObject*[20]));
+    temp->VarStacks[0]=(LapObject**)calloc(20,sizeof(LapObject*));
     temp->MaxVar=(int*)malloc(sizeof(int[8]));
     temp->VarNum=(int*)malloc(sizeof(int[8]));
     temp->PCStack=(int*)malloc(sizeof(int[8]));
@@ -97,12 +98,6 @@ LapState *InitVM(char* path){
     int i=0;
 	temp->MaxVar[0]=20;
 	temp->VarNum[0]=0;
-    for(;i<20;i++){
-		temp->VarStacks[0][i]=NULL;
-    }
-    /*for(;i<20;i++){
-		temp->Commands[i]=(char**)malloc(sizeof(char*[3]));
-    }*/
     temp->Index=0;
     temp->ConstNum=0;
     temp->MaxPC=20;
@@ -113,8 +108,8 @@ LapState *InitVM(char* path){
     temp->Err=0;
     char* onstr=NULL;
     while(1){
-        onstr=(char*)malloc(sizeof(char[40]));
-        if(fgets(onstr,40,fp)==NULL){
+        onstr=(char*)calloc(100,sizeof(100));
+        if(fgets(onstr,100,fp)==NULL){
 			free(onstr);
 			break;
         }
@@ -147,14 +142,18 @@ void DeleteState(LapState *state){
 					FreeObject(state->VarStacks[ii][i]);
 				}
 			}
+			free(state->VarStacks[ii]);
 		}
     }
     i=0,max=state->TruePC;
     for(;i<max;i++){
-    	/*
 		free(state->Commands[i][0]);
-		free(state->Commands[i][1]);
-		free(state->Commands[i][2]);???*/
+		if(state->Commands[i][1]!=NULL){
+			free(state->Commands[i][1]);
+		}
+		if(state->Commands[i][2]!=NULL){
+			free(state->Commands[i][2]);
+		}
         free(state->Commands[i]);
     }
     free(state->VarStacks);
@@ -162,6 +161,8 @@ void DeleteState(LapState *state){
     free(state->MaxVar);
     free(state->PCStack);
     free(state->Commands);
+    free(state->Stack);
+    FreeObject(state->Argv);
     free(state);
 }
 
@@ -483,10 +484,6 @@ void Calculate(LapState *env,int sign){
 			env->Err=2;
 			break;
 		}
-		if(op1->Property[n]==NULL){
-			env->Err=8;
-			break;
-		}
 		switch(type){
 		case 2:
 			onstr=(char*)malloc(sizeof(char[2]));
@@ -497,7 +494,6 @@ void Calculate(LapState *env,int sign){
 			temp->Size=1;
 			break;
 		case 4:
-			FreeObject(temp);
 			temp=CreateObjectFromObject(op1->Property[n]);
 			break;
 		}
@@ -524,7 +520,6 @@ void Calculate(LapState *env,int sign){
 	FreeObject(op2);
 	env->Stack[env->Index]=temp;
 	env->Index++;
-	env->Stack[env->Index]=NULL;
 }
 
 void Not(LapState *env){
@@ -584,15 +579,9 @@ void Print(LapState *env){
 
 void GetCommandArg(LapState *env){
     char** ins=env->Commands[env->PC];
-    int *i=ParseInt(ins[1]);
-    if(*i>args->Size-1){
-		env->Err=2;
-		return;
-    }
     ExtendStack(env);
-    env->Stack[env->Index]=CreateObjectFromObject(args);
+    env->Stack[env->Index]=CreateObjectFromObject(env->Argv);
     env->Index++;
-    free(i);
 }
 
 void StoreVar(LapState *env,int sign){
@@ -771,6 +760,7 @@ void Fwrite(LapState *env){
 	fputs((char*)op2->Value,(FILE*)op1->Value);
 	free(op1);
 	FreeObject(op2);
+	env->Stack[env->Index]=NULL;
 }
 
 void CloseFile(LapState *env){
@@ -802,6 +792,7 @@ void SetProperty(LapState *env){//引用设置
 	op1->Property[*i]=CreateObjectFromObject(op2);
 	FreeObject(op2);
 	free(i);
+	env->Stack[env->Index]=NULL;
 }
 
 void SetIndex(LapState *env){//引用设置
@@ -820,8 +811,12 @@ void SetIndex(LapState *env){//引用设置
 		FreeObject(op1->Property[index]);
 	}
 	op1->Property[index]=CreateObjectFromObject(op3);
+	if(op3->Type>3){
+		op3->Ref++;
+	}
 	FreeObject(op2);
 	FreeObject(op3);
+	env->Stack[env->Index]=NULL;
 }
 
 void ArrayPush(LapState *env){//配合引用使用
@@ -844,6 +839,7 @@ void ArrayPush(LapState *env){//配合引用使用
 		op1->Property[op1->Size++]=CreateObjectFromObject(op2);
 		FreeObject(op2);
 	}
+	env->Stack[env->Index]=NULL;
 }
 
 void ArrayPop(LapState *env){//配合引用使用
@@ -855,6 +851,7 @@ void ArrayPop(LapState *env){//配合引用使用
 	}
 	op1->Size--;
 	FreeObject(op1->Property[op1->Size]);
+	env->Stack[env->Index]=NULL;
 }
 
 void ArrayFill(LapState *env){//配合引用使用
@@ -870,6 +867,7 @@ void ArrayFill(LapState *env){//配合引用使用
 		op1->Property[i]=CreateObjectFromObject(op2);
 	}
 	FreeObject(op2);
+	env->Stack[env->Index]=NULL;
 }
 
 void ArrayInsert(LapState *env){//配合引用使用
@@ -899,6 +897,7 @@ void ArrayInsert(LapState *env){//配合引用使用
     op1->Size++;
 	FreeObject(op2);
 	FreeObject(op3);
+	env->Stack[env->Index]=NULL;
 }
 
 void ArrayRemove(LapState *env){//配合引用使用
@@ -917,6 +916,7 @@ void ArrayRemove(LapState *env){//配合引用使用
     }
     op1->Size--;
 	FreeObject(op2);
+	env->Stack[env->Index]=NULL;
 }
 
 void Dlopen(LapState *env){//动态库系列全部结合引用使用
@@ -978,6 +978,7 @@ void Dlclose(LapState *env){
 	LapObject *op1=env->Stack[env->Index];
 	FreeLibrary(op1->Value);
 	free(op1);
+	env->Stack[env->Index]=NULL;
 }
 
 void PushEmptyStr(LapState *env){
@@ -1003,6 +1004,24 @@ void Delete(LapState *env){
 	FreeObject(env->VarStacks[env->StackPC][*index]);
 	env->VarStacks[env->StackPC][*index]=NULL;
 	free(index);
+}
+
+void Exec(LapState *env){//配合引用使用
+	env->Index--;
+	LapObject *op2=env->Stack[env->Index];
+	env->Index--;
+	LapObject *op1=env->Stack[env->Index];
+	LapState *state=InitVM((char*)op1->Value,op2);
+	FreeObject(op1);
+	if(state==NULL){
+		printf("Init Failed\n");
+		env->Err=-1;
+		return;
+	}
+	StartVM(state);
+	env->Err=state->Err;
+	DeleteState(state);
+	env->Stack[env->Index]=NULL;
 }
 
 
@@ -1154,6 +1173,9 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(StringCmp(ins[0],"len")){
 		Len(env);
     }
+    else if(StringCmp(ins[0],"exec")){
+		Exec(env);
+    }
     else if(StringCmp(ins[0],"open_file")){
 		Calculate(env,'f');
     }
@@ -1218,7 +1240,7 @@ int main(int argc,char* argv[]){
 	for(;i<argc;i++){
 		args->Property[i-1]=CreateObject(2,StrLen(argv[i]),argv[i]);
 	}
-	LapState *env=InitVM(argv[1]);
+	LapState *env=InitVM(argv[1],args);
 	if(env==NULL){
 		printf("Init Failed\n");
 		FreeObject(args);
@@ -1260,7 +1282,6 @@ int main(int argc,char* argv[]){
 		}
 	}
 	args->Ref=0;
-	FreeObject(args);
 	DeleteState(env);
-	//system("pause");
+	system("pause");
 }
