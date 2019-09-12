@@ -1283,5 +1283,5 @@ int main(int argc,char* argv[]){
 	}
 	args->Ref=0;
 	DeleteState(env);
-	system("pause");
+	//system("pause");
 }
