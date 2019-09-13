@@ -981,6 +981,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 	vector<Token> exp=vector<Token>();
 	map<string,var>::iterator iter;
 	string next_type,l,last_word,rt_type;
+	vector<string> del_var;
 	bool is_return=false;
 	for(;i<max;i++){
 		if(tokens[i].Value[0]=='\n'){
@@ -1004,8 +1005,8 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 			}
 		}
-		else if(tab!=last_tab){
-			for(;tab<last_tab;last_tab--){
+		else{
+			for(;tab<m-1;m--){
 				domains.pop_back();
 				var_num.pop_back();
 			}
@@ -1087,6 +1088,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				out.push_back(Ins("set_var_"+t,Tostring(iter->second.id)));
 			}
 			else if(token.Value=="function"){
+					del_var=vector<string>();
 					if(ssize>1){
 						error_list.push_back("错误："+Position(token.line,token.byte)+" 函数不允许定义在其他指令中");
 						return i;
@@ -1133,6 +1135,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 							}
 							give.insert(pair<string,var>(o.Value,var(f,type.Value)));
 							farg.push_back(var(f/2,type.Value));
+							del_var.push_back(o.Value);
 						}
 						if(!error_list.empty()){
 							break;
@@ -1145,6 +1148,9 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
                     last_pos=out.size()-1;
                     last_i=i;
                     i=Grammar_check(tokens,true,give,i,0,jumpto,inner_loop)-1;
+                    for(int b=0;b<del_var.size();b++){
+						give.erase(del_var[b]);
+                    }
                     ftype="";
                     if(!error_list.empty()){
 						break;
@@ -1667,7 +1673,7 @@ int main(int argc,char* argv[]){
 	if(argc>1){
 		string on=string(argv[1]);
 		if(on=="-h"){
-			printf("Lapc by hacklinjiuyue v1.3a\n--------------------\n  lapc -h for help\n  lapc x.lap x.lapm to compile the file\n--------------------\n");
+			printf("Lapc by hacklinjiuyue v1.36a\n--------------------\n  lapc -h for help\n  lapc x.lap x.lapm to compile the file\n--------------------\n");
 		}
 		else{
 			//string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0

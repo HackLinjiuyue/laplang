@@ -484,6 +484,10 @@ void Calculate(LapState *env,int sign){
 			env->Err=2;
 			break;
 		}
+		if(n<0){
+			env->Err=9;
+			break;
+		}
 		switch(type){
 		case 2:
 			onstr=(char*)malloc(sizeof(char[2]));
@@ -709,6 +713,7 @@ void Goto(LapState *env){
     for(;v<n;v++){
 		env->Index--;
 		var[n-v-1]=CreateObjectFromObject(env->Stack[env->Index]);
+		var[n-v-1]->Ref++;
 		FreeObject(env->Stack[env->Index]);
 		env->Stack[env->Index]=NULL;
     }
@@ -790,6 +795,9 @@ void SetProperty(LapState *env){//引用设置
 		FreeObject(op1->Property[*i]);
 	}
 	op1->Property[*i]=CreateObjectFromObject(op2);
+	if(op2->Type>3){
+		op2->Ref++;
+	}
 	FreeObject(op2);
 	free(i);
 	env->Stack[env->Index]=NULL;
@@ -865,6 +873,9 @@ void ArrayFill(LapState *env){//配合引用使用
 			FreeObject(op1->Property[i]);
 		}
 		op1->Property[i]=CreateObjectFromObject(op2);
+	}
+	if(op2->Type>3){
+		op2->Ref++;
 	}
 	FreeObject(op2);
 	env->Stack[env->Index]=NULL;
@@ -1277,7 +1288,7 @@ int main(int argc,char* argv[]){
 			printf("Err:Index item is null!\n");
 			break;
 		case 9:
-			printf("Err:Array length can not be less than zero!\n");
+			printf("Err:Index can not be negative!\n");
 			break;
 		}
 	}
