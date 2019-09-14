@@ -16,6 +16,8 @@ enum LapType{
 	Lhandle,
 };
 
+bool is_reflect=false;
+
 using namespace std;
 map<string,string> TypeMap;
 //定义部分
@@ -35,7 +37,7 @@ vector<int> if_stack;
 
 const string Symbols[31]={")","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","{","}","==",".","!","//","/*","*/","[","]",",","&","|"};
 
-const string KeyWords[15]={"interface","function","return","if","break","continue","when","import","else","local","global","set","call","delete","#path"};
+const string KeyWords[16]={"interface","function","return","if","break","continue","when","import","else","local","global","set","call","delete","#path","#reflect"};
 
 const string Basic_type[10]={"int","float","bool","string","void","Array","File","DLLHandle","Object","NativeFunction"};
 
@@ -97,14 +99,16 @@ public:
 	int line;
 	bool is_interface;
 	bool is_local;
+	bool is_builtin;
 	string type;
 	vector<var> args;
-	function(int l,bool i,string t,vector<var> a,bool is_l=false){
+	function(int l,bool i,string t,vector<var> a,bool is_l=false,bool b=false){
 		line=l;
 		is_interface=i;
 		type=t;
 		args=a;
 		is_local=is_l;
+		is_builtin=b;
 	}
 };
 
@@ -299,7 +303,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			linshi="";
 			continue;
 		}
-		else if(Is_in_s(KeyWords,&onstr,15)){
+		else if(Is_in_s(KeyWords,&onstr,16)){
 			last_type="keyword";
 			if(onstr=="function"){
 				is_func=true;
@@ -856,6 +860,7 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 			else if(op.Type=="callbox"){//动参不进行安全检查
 				Fiter=functions.find(op.Value);
 				bool arr_push=false;
+				int over=99999;
 				if(Fiter==functions.end()){
 					error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'未定义");
 					return "";
@@ -868,11 +873,24 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 				}
 				size=op.sub.size();
 				if(op.Value=="PushValue"){
+					over=2;
 					if(size<2){
 						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/"+Tostring(Fiter->second.args.size()));
 						return "";
 					}
 					arr_push=true;
+				}
+				else if(op.Value=="Reflect_CallFunction"){
+					if(!is_reflect){
+						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'不能在未启用反射的情况下使用");
+						return "";
+					}
+					over=0;
+					arr_push=true;
+					if(!size){
+						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/"+Tostring(Fiter->second.args.size()));
+						return "";
+					}
 				}
 				else if(Fiter->second.args.size()!=size){
 					error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/"+Tostring(Fiter->second.args.size()));
@@ -884,7 +902,7 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					if(!error_list.empty()){
 						return "";
 					}
-					if(arr_push&&v>1){
+					if(arr_push&&v>over){
 						continue;
 					}
 					if(next_type!=Fiter->second.args[v].type&&Fiter->second.args[v].type!="Object"&&next_type!="Object"){
@@ -946,6 +964,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					else if(op.Value=="PushValue"){
 						out.push_back(Ins("arr_push",Tostring(op.sub.size()-1)));
+					}
+					else if(op.Value=="Reflect_CallFunction"){
+						out.push_back(Ins("ref_call",Tostring(op.sub.size()-1)));
 					}
 					else if(op.Value=="PopValue"){
 						out.push_back(Ins("arr_pop"));
@@ -1018,9 +1039,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 	return s[0].Type;
 }
 
-void Import(string path,string fimport);
+void Import(string path,bool builtin);
 
-int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=map<string,var>(),int start=0,int tab_num=0,int jumpto=0,bool inner_loop=false){
+int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=map<string,var>(),int start=0,int tab_num=0,int jumpto=0,bool inner_loop=false,bool is_builtin=false){
 	ssize++;
 	int i=start,posi,last_i,last_pos=999;
 	int max=tokens.size();
@@ -1139,6 +1160,9 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				out.push_back(Ins("set_var_"+t,Tostring(iter->second.id)));
 			}
+			else if(token.Value=="#reflect"){
+				is_reflect=true;
+			}
 			else if(token.Value=="function"){
 					del_var=vector<string>();
 					if(ssize>1){
@@ -1159,7 +1183,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					}
 					i++;
 					next=tokens[i];
-					if(Is_in_s(KeyWords,&next.Value,15)){
+					if(Is_in_s(KeyWords,&next.Value,16)){
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 函数名不能为关键字");
 						break;
 					}
@@ -1233,7 +1257,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					}
 					i++;
 					next=tokens[i];
-					if(Is_in_s(KeyWords,&next.Value,15)){
+					if(Is_in_s(KeyWords,&next.Value,16)){
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 接口函数名不能为关键字");
 						break;
 					}
@@ -1286,12 +1310,12 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 								functions.insert(pair<string,function>(token.Value,function(iter->second.id,true,next_type,farg)));
 							}
 							else{
-								functions.insert(pair<string,function>(token.Value,function(iter->second.id,true,next_type,farg,true)));
+								functions.insert(pair<string,function>(token.Value,function(iter->second.id,true,next_type,farg)));
 							}
 						}
 						else{
 							if(is_std){
-								functions.insert(pair<string,function>(token.Value,function(0,true,next_type,farg)));
+								functions.insert(pair<string,function>(token.Value,function(0,true,next_type,farg,false,true)));
 							}
 							else{
 								error_list.push_back("错误："+Position(line,byte)+" 接口'"+token.Value+"'必须与变量绑定");
@@ -1380,6 +1404,9 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					if(!error_list.empty()){
 						return i;
 					}
+				}
+				else{
+					out.push_back(Ins("push_null"));
 				}
 				is_return=true;
 				out.push_back(Ins("return"));
@@ -1556,7 +1583,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				i++;
 				next=tokens[i];
-				if(Is_in_s(KeyWords,&next.Value,15)){
+				if(Is_in_s(KeyWords,&next.Value,16)){
 					error_list.push_back("错误："+Position(next.line,next.byte)+" 变量名不能为关键字");
 					break;
 				}
@@ -1646,7 +1673,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 	return i;
 }
 
-void Compile_file(string File_name,char* temp_name,bool is_import=false){
+void Compile_file(string File_name,char* temp_name,bool is_import=false,bool is_builtin=false){
 	File_name=c_path+File_name;
 	FILE *fp=fopen(File_name.c_str(),"r");
 	if(fp==NULL){
@@ -1743,7 +1770,7 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false){
 	token_list.push_back(Token("break","\n",token.line+1,0));
 	if(error_list.empty()){
 		last_func=false;
-		Grammar_check(token_list,false,map<string,var>(),0,-1);
+		Grammar_check(token_list,false,map<string,var>(),0,-1,-1,false,is_builtin);
 		//语法解析
 	}
 	if(error_list.empty()&&!is_import){
@@ -1755,10 +1782,10 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false){
 	}
 }
 
-void Import(string path,string fimport=""){
+void Import(string path,bool builtin=false){
 	depends.insert(path);
 	path+=".lap";
-	Compile_file(path,NULL,true);
+	Compile_file(path,NULL,true,builtin);
 	if(warn_list.size()>0){
 		printf("在%s：\n",path.c_str());
 		for(int i=0;i<warn_list.size();i++){
@@ -1787,7 +1814,7 @@ int main(int argc,char* argv[]){
 			//string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0
 			domains.push_back(map<string,var>());
 			var_num.push_back(0);
-			Import("./builtin");
+			Import("./builtin",true);
 			is_std=false;
 			/*
 			if(error_list.size()>0){
@@ -1817,6 +1844,31 @@ int main(int argc,char* argv[]){
 				for(int i=0;i<error_list.size();i++){
 					printf("%s\n",error_list[i].c_str());
 				}
+			}
+			else if(is_reflect){
+				map<string,function>::iterator iter;
+				string p=string(argv[2]);
+				p+=".ref";
+				FILE *fp=fopen(p.c_str(),"w+");
+				for(iter=functions.begin();iter!=functions.end();iter++){
+					if(iter->second.is_builtin){
+						continue;
+					}
+					fputs(iter->first.c_str(),fp);
+					fputs(" ",fp);
+					if(iter->second.is_interface){
+						fputs(Tostring(iter->second.line).c_str(),fp);
+					}
+					else{
+						fputs(Tostring(iter->second.line-2).c_str(),fp);
+					}
+					fputs(" ",fp);
+					fputs(Tostring(iter->second.args.size()).c_str(),fp);
+					fputs(" ",fp);
+					fputs(Tostring(iter->second.is_interface).c_str(),fp);
+					fputs("\n",fp);
+				}
+				fclose(fp);
 			}
 			system("pause");
 		}

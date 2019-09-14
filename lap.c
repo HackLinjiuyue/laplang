@@ -4,6 +4,8 @@
 
 #include "CLap.h"
 
+int r_size=0;
+
 typedef struct{
 	LapObject*** VarStacks;
 	LapObject** Stack;
@@ -31,6 +33,8 @@ long long QuickPower(long long x,long long y)
 
 LapObject *args=NULL;
 
+char*** reflect=NULL;
+
 int StrLen(const char* str){
 	int i=0;
 	while(str[i]!=0){
@@ -46,7 +50,7 @@ void ExtendStack(LapState *env){
     }
 }
 
-char** SplitIns(char* str){
+char** SplitIns(char* str,int is_three){
 	int len=StrLen(str)-1;
     char** temp=(char**)calloc(3,sizeof(char*)),*onstr=(char*)calloc(20,sizeof(char));
     int i=0,index=0,k=0,max=20;
@@ -54,12 +58,12 @@ char** SplitIns(char* str){
 		if(str[i]==' '){
 			index=0;
 			temp[k]=onstr;
-			if(k==2){
+			if(k==2+is_three){
 				break;
 			}
 			onstr=(char*)calloc(5,sizeof(char));
 			max=4;
-			k++;
+			++k;
 		}
 		else{
 			if(index==max){
@@ -68,10 +72,33 @@ char** SplitIns(char* str){
 				memset(onstr+max-20,0,20);
 			}
 			onstr[index]=str[i];
-			index++;
+			++index;
 		}
     }
 	temp[k]=onstr;
+    return temp;
+}
+
+int* GetIns(char**** on,FILE* fp,int ref){
+    char* onstr=NULL;
+    int MaxPC=20,TruePC=0;
+    int *temp=calloc(2,sizeof(int));
+    while(1){
+        onstr=(char*)calloc(100,sizeof(100));
+        if(fgets(onstr,100,fp)==NULL){
+			free(onstr);
+			break;
+        }
+        if(TruePC==MaxPC){
+			MaxPC+=20;
+			*on=(char***)realloc(*on,sizeof(char**[MaxPC]));
+        }
+        (*on)[TruePC]=SplitIns(onstr,ref);
+        ++TruePC;
+        free(onstr);
+    }
+    temp[0]=TruePC;
+    temp[1]=MaxPC;
     return temp;
 }
 
@@ -104,21 +131,10 @@ LapState *InitVM(char* path,LapObject* arg){
     temp->MaxConst=20;
     temp->MaxIndex=20;
     temp->Err=0;
-    char* onstr=NULL;
-    while(1){
-        onstr=(char*)calloc(100,sizeof(100));
-        if(fgets(onstr,100,fp)==NULL){
-			free(onstr);
-			break;
-        }
-        if(temp->TruePC==temp->MaxPC){
-			temp->MaxPC+=20;
-			temp->Commands=(char***)realloc(temp->Commands,sizeof(char**[temp->MaxPC]));
-        }
-        temp->Commands[temp->TruePC]=SplitIns(onstr);
-        temp->TruePC++;
-        free(onstr);
-    }
+    int *p=GetIns(&temp->Commands,fp,0);
+    temp->TruePC=p[0];
+    temp->MaxPC=p[1];
+    free(p);
     fclose(fp);
 	return temp;
 }
@@ -204,9 +220,9 @@ double* ParseFloat(char* str){
 		i=1,sign=-1;
     }
     while(str[l]!='.'){
-		l++;
+		++l;
     }
-    l--;
+    --l;
     while(str[i]!='.'){
 		*temp+=(str[i]-'0')*QuickPower(10,l-i);
 		++i;
@@ -215,7 +231,7 @@ double* ParseFloat(char* str){
     l=1;
     while(str[i]>0){
 		*temp+=(str[i]-'0')*pow(0.1,l);
-		l++;
+		++l;
 		++i;
     }
     *temp*=sign;
@@ -239,7 +255,7 @@ char* ParseStr(const char* str){
 			else{
 				temp[index]=str[i];
 			}
-			index++;
+			++index;
 		}
 		else if(str[i]=='\\'){
 			lastc='\\';
@@ -247,7 +263,7 @@ char* ParseStr(const char* str){
 		}
 		else{
 			temp[index]=str[i];
-			index++;
+			++index;
 		}
 		lastc=str[i];
 	}
@@ -283,7 +299,7 @@ void AddConst(LapState *env,char type){
 		env->ConstVars[env->ConstNum]=obj;
 	break;
 	}
-	env->ConstNum++;
+	++env->ConstNum;
 }
 
 void PushConst(LapState *env){
@@ -291,7 +307,7 @@ void PushConst(LapState *env){
     int *i=ParseInt(ins[1]);
     ExtendStack(env);
     env->Stack[env->Index]=CreateObjectFromObject(env->ConstVars[*i]);
-    env->Index++;
+    ++env->Index;
     free(i);
 }
 
@@ -307,22 +323,22 @@ void PushVar(LapState *env,int sign){
 		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[0][*i]);
 		break;
     }
-    env->Index++;
+    ++env->Index;
     free(i);
 }
 
 void Pop(LapState *env){
 	if(env->Index>0){
-		env->Index--;
+		--env->Index;
 		FreeObject(env->Stack[env->Index]);
 		env->Stack[env->Index]=NULL;
 	}
 }
 
 void Calculate(LapState *env,int sign){
-	env->Index--;
+	--env->Index;
 	LapObject *op2=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	int type=op1->Type;
 	char* onstr=NULL;
@@ -532,7 +548,7 @@ void Calculate(LapState *env,int sign){
 	FreeObject(op1);
 	FreeObject(op2);
 	env->Stack[env->Index]=temp;
-	env->Index++;
+	++env->Index;
 }
 
 void Not(LapState *env){
@@ -588,7 +604,7 @@ void Ops(LapState *env){
 }
 
 void Print(LapState *env){
-	env->Index--;
+	--env->Index;
 	LapObject *obj=NULL,*op1=env->Stack[env->Index];
 	if(op1!=NULL){
 		if(op1->Type>3){
@@ -607,7 +623,7 @@ void GetCommandArg(LapState *env){
     char** ins=env->Commands[env->PC];
     ExtendStack(env);
     env->Stack[env->Index]=CreateObjectFromObject(env->Argv);
-    env->Index++;
+    ++env->Index;
 }
 
 void StoreVar(LapState *env,int sign){
@@ -619,21 +635,21 @@ void StoreVar(LapState *env,int sign){
 			env->MaxVar[PC]+=20;
 			env->VarStacks[PC]=(LapObject**)realloc(env->VarStacks[PC],sizeof(LapObject*[env->MaxVar[PC]]));
 		}
-		env->VarNum[PC]++;
+		++env->VarNum[PC];
         env->VarStacks[PC][*i]=CreateObjectFromObject(env->Stack[0]);
-        env->VarStacks[PC][*i]->Ref++;
+        ++env->VarStacks[PC][*i]->Ref;
 		break;
 	case 'g':
 		if(*i>env->MaxVar[0]-1){
 			env->MaxVar[0]+=20;
 			env->VarStacks[0]=(LapObject**)realloc(env->VarStacks[0],sizeof(LapObject*[env->MaxVar[0]]));
 		}
-		env->VarNum[0]++;
+		++env->VarNum[0];
         env->VarStacks[0][*i]=CreateObjectFromObject(env->Stack[0]);
-        env->VarStacks[0][*i]->Ref++;
+        ++env->VarStacks[0][*i]->Ref;
 		break;
     }
-    env->Index--;
+    --env->Index;
     FreeObject(env->Stack[0]);
     env->Stack[0]=NULL;
     free(i);
@@ -666,7 +682,7 @@ void SetVar(LapState *env,int sign){
 		}
 		break;
     }
-    env->Index--;
+    --env->Index;
     FreeObject(env->Stack[0]);
     env->Stack[0]=NULL;
     free(i);
@@ -688,7 +704,7 @@ void Jump(LapState *env,int sign){
 			free(line);
 		}
 	}
-	env->Index--;
+	--env->Index;
 	FreeObject(env->Stack[0]);
 	env->Stack[0]=NULL;
 }
@@ -703,7 +719,7 @@ void Goto(LapState *env){
 		return;
 	}
 	env->PCStack[env->StackPC]=env->PC;
-	env->StackPC++;
+	++env->StackPC;
 	if(env->StackPC>MAX_STACK){
 		env->Err=4;
 		return;
@@ -729,11 +745,11 @@ void Goto(LapState *env){
 	line=ParseInt(ins[1]);
 	env->PC=*line-2;
 	free(line);
-    for(;v<n;v++){
-		env->Index--;
+    for(;v<n;++v){
+		--env->Index;
 		if(env->Stack[env->Index]!=NULL){
 			var[n-v-1]=CreateObjectFromObject(env->Stack[env->Index]);
-			var[n-v-1]->Ref++;
+			++var[n-v-1]->Ref;
 			FreeObject(env->Stack[env->Index]);
 			env->Stack[env->Index]=NULL;
 		}
@@ -741,7 +757,7 @@ void Goto(LapState *env){
 }
 
 void Return(LapState *env){
-	env->StackPC--;
+	--env->StackPC;
 	int PC=env->StackPC;
 	env->PC=env->PCStack[PC];
 	int i=0,max=env->VarNum[PC];
@@ -780,9 +796,9 @@ void Fgetc(LapState *env){//所有文件操作确保至少绑定在一个变量�
 }
 
 void Fwrite(LapState *env){
-	env->Index--;
+	--env->Index;
 	LapObject *op2=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	fputs((char*)op2->Value,(FILE*)op1->Value);
 	free(op1);
@@ -791,7 +807,7 @@ void Fwrite(LapState *env){
 }
 
 void CloseFile(LapState *env){
-	env->Index--;
+	--env->Index;
 	LapObject *obj=env->Stack[env->Index];
 	fclose((FILE*)obj->Value);
 	free(obj);
@@ -802,23 +818,23 @@ void PushObj(LapState *env){
     ExtendStack(env);
     int *n=ParseInt(env->Commands[env->PC][1]);
     env->Stack[env->Index]=CreateObject(4,*n,NULL);
-    env->Index++;
+    ++env->Index;
     free(n);
 }
 
 void SetProperty(LapState *env){//引用设置
 	char** ins=env->Commands[env->PC];
-	env->Index--;
+	--env->Index;
 	LapObject *op2=env->Stack[env->Index];
 	int *i=ParseInt(ins[1]);
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	if(op1->Property[*i]!=NULL){
 		FreeObject(op1->Property[*i]);
 	}
 	op1->Property[*i]=CreateObjectFromObject(op2);
 	if(op2->Type>3){
-		op2->Ref++;
+		++op2->Ref;
 	}
 	FreeObject(op2);
 	free(i);
@@ -826,11 +842,11 @@ void SetProperty(LapState *env){//引用设置
 }
 
 void SetIndex(LapState *env){//引用设置
-	env->Index--;
+	--env->Index;
 	LapObject *op3=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op2=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	int index=*(int*)op2->Value;
 	if(index>op1->Size-1){
@@ -842,7 +858,7 @@ void SetIndex(LapState *env){//引用设置
 	}
 	op1->Property[index]=CreateObjectFromObject(op3);
 	if(op3->Type>3){
-		op3->Ref++;
+		++op3->Ref;
 	}
 	FreeObject(op2);
 	FreeObject(op3);
@@ -856,7 +872,7 @@ void ArrayPush(LapState *env){//配合引用使用
 		op1->MaxSize+=*p;
 		int m=op1->MaxSize,k=op1->Size;
 		op1->Property=(LapObject**)realloc(op1->Property,sizeof(LapObject*[m]));
-		for(;k<m;k++){
+		for(;k<m;++k){
 			op1->Property[k]=NULL;
 		}
 	}
@@ -872,22 +888,121 @@ void ArrayPush(LapState *env){//配合引用使用
 	env->Stack[env->Index]=NULL;
 }
 
+void ReflectCall(LapState *env){
+	int *p=ParseInt(env->Commands[env->PC][1]),n=*p;//获取参数个数
+	LapObject *op1=env->Stack[env->Index-n-1];//获取到字符串
+	int i=0,is_interface;
+	char* onstr=(char*)op1->Value,**ins=NULL;
+	for(;i<r_size;i++){
+		if(StringCmp(reflect[i][0],onstr)){
+			break;
+		}
+	}
+	if(i==r_size){
+		env->Err=10;
+		env->Onstr=onstr;
+		return;
+	}
+	else{
+		ins=reflect[i];
+		free(p);
+		p=ParseInt(ins[3]);
+		is_interface=*p;
+		free(p);
+		p=ParseInt(ins[1]);//接口为变量索引（只支持全局接口） 函数为pc地址
+	}
+	if(is_interface){
+		int var_index=*p;
+		free(p);
+		p=ParseInt(ins[2]);//参数数量
+		if(*p!=n){
+			free(p);
+			env->Err=10;
+			env->Onstr=onstr;
+			return;
+		}
+		FreeObject(op1);
+		op1=CreateObject(Lobject,n,NULL);
+		i=0;
+		int sum=env->Index-n;
+		env->Index-=n+1;
+		LapObject *op2=NULL;
+		for(;i<n;++i){
+			op2=env->Stack[sum+i];
+			op1->Property[i]=CreateObjectFromObject(op2);
+			FreeObject(op2);
+		}
+		//((LapObject*(*)(LapObject*))(op1->Value))(arg)
+		op2=env->VarStacks[0][var_index];
+		env->Stack[env->Index++]=((LapObject*(*)(LapObject*))(op2->Value))(op1);
+		FreeObject(op1);
+	}
+	else{
+		FreeObject(op1);
+        int pc=*p;
+        free(p);
+        p=ParseInt(ins[2]);
+		if(*p!=n){
+			free(p);
+			env->Err=10;
+			env->Onstr=onstr;
+			return;
+		}
+		int v=0;
+		env->PCStack[env->StackPC]=env->PC;
+		env->PC=pc;
+		++env->StackPC;
+		if(env->StackPC>MAX_STACK){
+			env->Err=4;
+			return;
+		}
+		if(env->StackPC==env->MaxStackPC){
+			int i=env->MaxStackPC-1;
+			env->MaxStackPC+=8;
+			int max=i+8;
+			env->VarNum=(int*)realloc(env->VarNum,sizeof(int[max]));
+			env->VarStacks=(LapObject***)realloc(env->VarStacks,sizeof(LapObject**[max]));
+			env->MaxVar=(int*)realloc(env->MaxVar,sizeof(int[max]));
+			env->PCStack=(int*)realloc(env->PCStack,sizeof(int[max]));
+			for(;i<max;++i){
+				env->VarNum[i]=0;
+				env->MaxVar[i]=12;
+				env->VarStacks[i]=NULL;
+			}
+		}
+		env->VarStacks[env->StackPC-1]=(LapObject**)calloc(n,sizeof(LapObject*));
+		env->VarNum[env->StackPC-1]=n;
+		LapObject** var=env->VarStacks[env->StackPC-1];
+		for(;v<n;++v){
+			--env->Index;
+			if(env->Stack[env->Index]!=NULL){
+				var[n-v-1]=CreateObjectFromObject(env->Stack[env->Index]);
+				++var[n-v-1]->Ref;
+				FreeObject(env->Stack[env->Index]);
+				env->Stack[env->Index]=NULL;
+			}
+		}
+		--env->Index;
+	}
+	free(p);
+}
+
 void ArrayPop(LapState *env){//配合引用使用
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	if(!op1->Size){
 		env->Err=6;
 		return;
 	}
-	op1->Size--;
+	--op1->Size;
 	FreeObject(op1->Property[op1->Size]);
 	env->Stack[env->Index]=NULL;
 }
 
 void ArrayFill(LapState *env){//配合引用使用
-	env->Index--;
+	--env->Index;
 	LapObject *op2=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	int max=op1->Size,i=0;
 	for(;i<max;++i){
@@ -897,24 +1012,24 @@ void ArrayFill(LapState *env){//配合引用使用
 		op1->Property[i]=CreateObjectFromObject(op2);
 	}
 	if(op2->Type>3){
-		op2->Ref++;
+		++op2->Ref;
 	}
 	FreeObject(op2);
 	env->Stack[env->Index]=NULL;
 }
 
 void ArrayInsert(LapState *env){//配合引用使用
-	env->Index--;
+	--env->Index;
 	LapObject *op3=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op2=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	if(op1->Size+1>=op1->MaxSize){
 		op1->MaxSize+=8;
 		int m=op1->MaxSize,k=op1->Size;
 		op1->Property=(LapObject**)realloc(op1->Property,sizeof(LapObject*[m]));
-		for(;k<m;k++){
+		for(;k<m;++k){
 			op1->Property[k]=NULL;
 		}
 	}
@@ -923,20 +1038,20 @@ void ArrayInsert(LapState *env){//配合引用使用
 		env->Err=2;
 		return;
     }
-    for(;max>index;max--){
+    for(;max>index;--max){
 		op1->Property[max]=op1->Property[max-1];
     }
     op1->Property[index]=CreateObjectFromObject(op3);
-    op1->Size++;
+    ++op1->Size;
 	FreeObject(op2);
 	FreeObject(op3);
 	env->Stack[env->Index]=NULL;
 }
 
 void ArrayRemove(LapState *env){//配合引用使用
-	env->Index--;
+	--env->Index;
 	LapObject *op2=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
     int index=*(int*)op2->Value,max=op1->Size-1;
     if(index<0||index>op1->Size-1){
@@ -944,16 +1059,16 @@ void ArrayRemove(LapState *env){//配合引用使用
 		return;
     }
     FreeObject(op1->Property[index]);
-    for(;max>index;max--){
+    for(;max>index;--max){
 		op1->Property[max-1]=op1->Property[max];
     }
-    op1->Size--;
+    --op1->Size;
 	FreeObject(op2);
 	env->Stack[env->Index]=NULL;
 }
 
 void Dlopen(LapState *env){//动态库系列全部结合引用使用
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	void* temp=LoadLibrary((char*)op1->Value);
 	if(temp==NULL){
@@ -964,13 +1079,13 @@ void Dlopen(LapState *env){//动态库系列全部结合引用使用
 	}
 	FreeObject(env->Stack[env->Index]);
 	env->Stack[env->Index]=CreateObject(Lhandle,0,temp);
-	env->Index++;
+	++env->Index;
 }
 
 void Dlsym(LapState *env){
-	env->Index--;
+	--env->Index;
 	LapObject *op2=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	char* str=(char*)op2->Value;
 	void* temp=GetProcAddress(op1->Value,str);//函数的Size必须写明参数 不支持动态参数
@@ -985,32 +1100,32 @@ void Dlsym(LapState *env){
 	int *t=ParseInt(ins[1]),type=*t;
 	free(t);
 	env->Stack[env->Index]=CreateObject(type,0,temp);
-	env->Index++;
+	++env->Index;
 }
 
 void CallNative(LapState *env){
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];//函数本体先入栈
 	int *t=ParseInt(env->Commands[env->PC][1]),max=*t;
 	free(t);
 	LapObject *arg=CreateObject(Lobject,max,NULL);
 	int i=0;
 	for(;i<max;++i){
-		env->Index--;
+		--env->Index;
 		if(env->Stack[env->Index]==NULL){
 			continue;
 		}
 		arg->Property[max-i-1]=CreateObjectFromObject(env->Stack[env->Index]);
-		arg->Property[max-i-1]->Ref++;
+		++arg->Property[max-i-1]->Ref;
 		FreeObject(env->Stack[env->Index]);
 	}
 	env->Stack[env->Index]=((LapObject*(*)(LapObject*))(op1->Value))(arg);
-	env->Index++;
+	++env->Index;
 	FreeObject(arg);
 }
 
 void Dlclose(LapState *env){
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	FreeLibrary(op1->Value);
 	free(op1);
@@ -1020,7 +1135,7 @@ void Dlclose(LapState *env){
 void PushEmptyStr(LapState *env){
     ExtendStack(env);
     env->Stack[env->Index]=CreateObject(2,0,NULL);
-    env->Index++;
+    ++env->Index;
 }
 
 void PushArray(LapState *env){
@@ -1042,9 +1157,9 @@ void Delete(LapState *env){
 }
 
 void Exec(LapState *env){//配合引用使用
-	env->Index--;
+	--env->Index;
 	LapObject *op2=env->Stack[env->Index];
-	env->Index--;
+	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	LapState *state=InitVM((char*)op1->Value,op2);
 	FreeObject(op1);
@@ -1173,7 +1288,7 @@ void DoIns(LapState *env){//use ' ' to separate parms
     }
     else if(StringCmp(ins[0],"push_null")){
 		ExtendStack(env);
-		env->Index++;
+		++env->Index;
     }
     else if(StringCmp(ins[0],"true_jump")){//1 int for line
 		Jump(env,1);
@@ -1279,6 +1394,9 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(StringCmp(ins[0],"call_native")){
 		CallNative(env);
     }
+    else if(StringCmp(ins[0],"ref_call")){
+		ReflectCall(env);
+    }
     else{//小于0虚拟机问题 大于0编程问题
 		env->Err=-1;
 		printf("%d Err:unrecognized ins:%s\n",env->PC+1,ins[0]);
@@ -1287,7 +1405,7 @@ void DoIns(LapState *env){//use ' ' to separate parms
 
 int StartVM(LapState *env){
 	int max=env->TruePC;
-	for(;env->PC<max;env->PC++){
+	for(;env->PC<max;++env->PC){
         DoIns(env);
         if(env->Err){
 			break;
@@ -1304,6 +1422,17 @@ int main(int argc,char* argv[]){
 		args->Property[i-1]=CreateObject(2,StrLen(argv[i]),argv[i]);
 	}
 	LapState *env=InitVM(argv[1],args);
+	char* onstr=ConcatStr(argv[1],".ref",StrLen(argv[1]),4);
+	FILE *ref=fopen(onstr,"r");
+	int is_reflect=0;
+	if(ref!=NULL){
+		is_reflect=1;
+		reflect=malloc(sizeof(char**[20]));
+		int *p=GetIns(&reflect,ref,1);
+		r_size=p[0];
+		free(p);
+		fclose(ref);
+	}
 	if(env==NULL){
 		printf("Init Failed\n");
 		FreeObject(args);
@@ -1342,9 +1471,23 @@ int main(int argc,char* argv[]){
 		case 9:
 			printf("Err:Index can not be negative!\n");
 			break;
+		case 10:
+			printf("Err:Reflection function '%s' Not Exist or arg number error!\n",env->Onstr);
+			free(env->Onstr);
+			break;
 		}
 	}
 	args->Ref=0;
 	DeleteState(env);
+	if(is_reflect){
+		int i=0;
+		for(;i<r_size;i++){
+			free(reflect[i][0]);
+			free(reflect[i][1]);
+			free(reflect[i][2]);
+			free(reflect[i]);
+		}
+		free(reflect);
+	}
 	//system("pause");
 }
