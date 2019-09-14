@@ -4,6 +4,7 @@
 #include<sstream>
 #include<stack>
 #include<math.h>
+#include<set>
 
 enum LapType{
 	Lint=0,
@@ -28,12 +29,13 @@ class var{
 	}
 };
 
+vector<string> warn_list;
+
 const string Symbols[31]={")","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","{","}","==",".","!","//","/*","*/","[","]",",","&","|"};
 
-const string KeyWords[14]={"interface","function","return","if","break","continue","when","import","else","local","global","set","call","delete"};
+const string KeyWords[15]={"interface","function","return","if","break","continue","when","import","else","local","global","set","call","delete","#path"};
 
 const string Basic_type[10]={"int","float","bool","string","void","Array","File","DLLHandle","Object","NativeFunction"};
-
 
 const string Num[10]={"0","1","2","3","4","5","6","7","8","9"};
 
@@ -52,7 +54,11 @@ const string ct[4]={"int","float","bool","string"};
 
 vector<string> error_list;
 
+set<string> depends;
+
 vector<int> last_p;
+
+string c_path;
 
 string ftype="";
 
@@ -256,7 +262,7 @@ int floatstoi(string *s){
 }
 
 string Position(int line,int byte){
-	return Tostring(line)+"."+Tostring(byte);
+	return Tostring(line)+":"+Tostring(byte);
 }
 
 void Parse_Token(FILE *fp,vector<Token> *token_list){
@@ -291,7 +297,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			linshi="";
 			continue;
 		}
-		else if(Is_in_s(KeyWords,&onstr,14)){
+		else if(Is_in_s(KeyWords,&onstr,15)){
 			last_type="keyword";
 			if(onstr=="function"){
 				is_func=true;
@@ -468,6 +474,7 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛 优化�
 	int cur = 0,size = token_list.size();
 	while (cur < size)
 	{
+		//cout<<token_list[cur].Type<<" "<<token_list[cur].Value<<endl;
 		if (token_list[cur].Value == "(")
 		{
 			s.push(token_list[cur]);
@@ -475,9 +482,11 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛 优化�
 
 		else if (token_list[cur].Value == ")") //弹出内容直到遇到第一个左括号
 		{
-			while (s.top().Value != "(" && !
-				   s.empty())
+			while (!s.empty())
 			{
+				if(s.top().Value == "("){
+					break;
+				}
 				out.push_back(s.top());
 				s.pop();
 			}
@@ -505,6 +514,7 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛 优化�
 		out.push_back(s.top());
 		s.pop();
 	}
+	//cout<<endl;
 	return out;
 }
 
@@ -516,6 +526,7 @@ vector<Token> Fold(vector<Token> &token_list){
 	bool is_return=false;
 	for(int i=0;i<token_list.size();i++){
 		token=token_list[i];
+		//cout<<token.Type<<" "<<token.Value<<endl;
 		if(token.Value=="/*"){
 			i++;
 			for(;i<token_list.size();i++){
@@ -575,14 +586,14 @@ vector<Token> Fold(vector<Token> &token_list){
 			delete arg;
 		}
 		else if(token.Value=="("){
-			temp.push_back(token);
 			i++;
+			temp.push_back(token);
 			line=token.line;
 			byte=token.byte;
 			kh=1;
+			arg=new vector<Token>();
 			for(;i<token_list.size();i++){
 				token=token_list[i];
-				temp.push_back(token);
 				if(token.Value=="("){
 					kh++;
 				}
@@ -592,11 +603,18 @@ vector<Token> Fold(vector<Token> &token_list){
 				if(kh==0){
 					break;
 				}
+				arg->push_back(token);
 			}
 			if(kh>0){
 				error_list.push_back("错误："+Position(line,byte)+" 表达式缺少')'");
 				break;
 			}
+			*arg=Fold(*arg);
+			for(int c=0;c<arg->size();c++){
+				temp.push_back((*arg)[c]);
+			}
+			temp.push_back(Token("op",")",token.line,token.byte));
+			delete arg;
 		}
 		else if(token.Value=="["){
 			kh=1;
@@ -629,6 +647,14 @@ vector<Token> Fold(vector<Token> &token_list){
 			delete arg;
 		}
 		else{
+			if(i>0&&i<token_list.size()-1){
+				if(token_list[i-1].Type=="int"&&token.Value=="."&&token_list[i+1].Type=="int"){
+					temp.pop_back();
+					token.Type="float";
+					token.Value=token_list[i-1].Value+"."+token_list[i+1].Value;
+					i++;
+				}
+			}
 			temp.push_back(token);
 		}
 		if(error_list.size()>0){
@@ -674,6 +700,10 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 			continue;
 		}
 		if(op.Type=="op"){
+			if(s.empty()){
+				error_list.push_back("错误："+Position(op.line,op.byte)+" 符号'"+op.Value+"'语法错误");
+				return "";
+			}
 			op2=s.back();
 			s.pop_back();
 			if(op.Value=="!"){
@@ -690,9 +720,17 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 				next_type="Object";
 			}
 			else{
+				if(s.empty()){
+					error_list.push_back("错误："+Position(op.line,op.byte)+" 符号'"+op.Value+"'语法错误");
+					return "";
+				}
 				op1=s.back();
 				next_type=op1.Type;
 				s.pop_back();
+				if(op1.Type!=op2.Type&&op1.Type!="Object"&&op2.Type!="Object"){
+					error_list.push_back("错误："+Position(op.line,op.byte)+" 运算类型不符 "+op1.Type+"/"+op2.Type);
+					return "";
+				}
 				if(op.Value=="+"){
 					out.push_back(Ins("add"));
 				}
@@ -790,7 +828,7 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 							is_ref="true";
 						}
 						if(i<exp.size()-1){
-							if(exp[i+1].Value!="."){
+							if(!(exp[i+1].Value=="."&&exp[i+1].Type=="op")){
 								op.Type=iter->second.type;
 								if(is_global){
 									out.push_back(Ins("push_var_global",Tostring(iter->second.id)));
@@ -865,10 +903,16 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					else if(op.Value=="File"){
 						out.push_back(Ins("open_file"));
 					}
+					else if(op.Value=="Int"){
+						out.push_back(Ins("int"));
+					}
+					else if(op.Value=="Float"){
+						out.push_back(Ins("float"));
+					}
 					else if(op.Value=="IsNull"){
 						out.push_back(Ins("is_null"));
 					}
-					else if(op.Value=="Opposite"){
+					else if(op.Value=="Opposite"||op.Value=="负"){
 						out.push_back(Ins("ops"));
 					}
 					else if(op.Value=="Fgetc"){
@@ -882,6 +926,12 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					else if(op.Value=="Asc"){
 						out.push_back(Ins("asc"));
+					}
+					else if(op.Value=="Inc"){
+						out.push_back(Ins("inc"));
+					}
+					else if(op.Value=="Dec"){
+						out.push_back(Ins("dec"));
 					}
 					else if(op.Value=="Print"){
 						out.push_back(Ins("print"));
@@ -921,20 +971,20 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					else if(op.Value=="DLLGetFunction"){
 						if(TypeMap.find(Fiter->second.type)==TypeMap.end()){
-							out.push_back(Ins("dlsym","4",Tostring(Fiter->second.args.size())));
+							out.push_back(Ins("dlsym","4"));
 						}
 						else{
-							out.push_back(Ins("dlsym",TypeMap[Fiter->second.type],Tostring(Fiter->second.args.size())));
+							out.push_back(Ins("dlsym",TypeMap[Fiter->second.type]));
 						}
 					}
 					else{
 						if(Fiter->second.is_local){
-							out.push_back(Ins("push_var_local",Tostring(Fiter->second.line),"true"));
+							out.push_back(Ins("push_var_local",Tostring(Fiter->second.line)));
 						}
 						else{
-							out.push_back(Ins("push_var_global",Tostring(Fiter->second.line),"true"));
+							out.push_back(Ins("push_var_global",Tostring(Fiter->second.line)));
 						}
-						out.push_back(Ins("call_native"));
+						out.push_back(Ins("call_native",Tostring(Fiter->second.args.size())));
 					}
 				}
 				s.push_back(Token(Fiter->second.type,"",op.line,op.byte));
@@ -1077,11 +1127,11 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				exp=Trans_exp(exp);
 				exp.push_back(Token());
-				o_t=Parse_exp(exp,false,domains[tab],tab==0);
+				o_t=Parse_exp(exp,true,domains[tab],tab==0);
 				if(!error_list.empty()){
 					return max;
 				}
-				if(o_t!="Object"&&o_t!=iter->second.type){
+				if(o_t!="Object"&&o_t!=iter->second.type&&iter->second.type!="Object"){
 					error_list.push_back("错误："+Position(line,byte)+" 变量'"+iter->first+"'类型与表达式的类型不匹配 "+iter->second.type+"/"+o_t);
 					return max;
 				}
@@ -1107,7 +1157,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					}
 					i++;
 					next=tokens[i];
-					if(Is_in_s(KeyWords,&next.Value,14)){
+					if(Is_in_s(KeyWords,&next.Value,15)){
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 函数名不能为关键字");
 						break;
 					}
@@ -1181,7 +1231,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					}
 					i++;
 					next=tokens[i];
-					if(Is_in_s(KeyWords,&next.Value,14)){
+					if(Is_in_s(KeyWords,&next.Value,15)){
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 接口函数名不能为关键字");
 						break;
 					}
@@ -1393,6 +1443,15 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					i--;
 				}
 			}
+			else if(token.Value=="#path"){
+				i++;
+				token=tokens[i];
+				if(token.Type!="string"){
+					error_list.push_back("错误："+Position(token.line,token.byte)+" 路径必须为字符串");
+					return max;
+				}
+				c_path=token.Value;
+			}
 			else if(token.Value=="when"){
 				i++;
 				exp=vector<Token>();
@@ -1459,7 +1518,12 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					return i;
 				}
 				ssize--;
-				Import(token.Value,"");
+				if(depends.find(token.Value)==depends.end()){
+					Import(token.Value,"");
+				}
+				else{
+					warn_list.push_back("警告："+Position(line,byte)+" 库'"+token.Value+"'已被引用");
+				}
 				ssize++;
 				if(!error_list.empty()){
 					return i;
@@ -1474,7 +1538,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				i++;
 				next=tokens[i];
-				if(Is_in_s(KeyWords,&next.Value,14)){
+				if(Is_in_s(KeyWords,&next.Value,15)){
 					error_list.push_back("错误："+Position(next.line,next.byte)+" 变量名不能为关键字");
 					break;
 				}
@@ -1542,6 +1606,13 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 			}
 			last_word=l;
 		}
+		else if(token.Type=="callbox"){
+			exp=vector<Token>();
+			exp.push_back(token);
+			if(Parse_exp(exp,false,give,tab==0,true)!="void"){
+				out.push_back(Ins("pop"));
+			}
+		}
 		else{
 			if(token.Value!="local"&&token.Value!="global"){
 				error_list.push_back("错误："+Position(token.line,token.byte)+" 指令'"+token.Value+"'无效");
@@ -1558,6 +1629,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 }
 
 void Compile_file(string File_name,char* temp_name,bool is_import=false){
+	File_name=c_path+File_name;
 	FILE *fp=fopen(File_name.c_str(),"r");
 	if(fp==NULL){
 		cout<<"错误：文件"<<File_name<<"不存在\n";
@@ -1565,6 +1637,7 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false){
 	}
 	vector<Token> token_list;
 	vector<string> temp;
+	token_list.push_back(Token("break","\n",0,0));
 	Parse_Token(fp,&token_list);
 	fclose(fp);
 	int m=token_list.size();
@@ -1582,6 +1655,12 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false){
 			token.Type="int";
 			token_list[i].Value=Tostring(EOF);
 			token.Value=token_list[i].Value;
+		}
+		else if(token.Value=="pi"){
+			token_list[i].Type="float";
+			token.Type="float";
+			token_list[i].Value="3.141592";
+			token.Value="3.141592";
 		}
 		else{
 			bool tmp=true;
@@ -1618,7 +1697,10 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false){
 				}
 			}
 			if(on){
-				if(token.Value.length()>0){
+				if(token.Value.length()>0&&token_list[i-1].Value!="import"&&token_list[i-1].Value!="#path"){
+					if(token.Type=="float"&&token.Value=="."){
+						continue;
+					}
 					consts.push_back(token);
 					if(token.Type=="int"){
 						out.push_back(Ins(encodeConst(Lint),token.Value));
@@ -1656,8 +1738,16 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false){
 }
 
 void Import(string path,string fimport=""){
+	depends.insert(path);
 	path+=".lap";
 	Compile_file(path,NULL,true);
+	if(warn_list.size()>0){
+		printf("在%s：\n",path.c_str());
+		for(int i=0;i<warn_list.size();i++){
+			printf("%s\n",warn_list[i].c_str());
+			warn_list.pop_back();
+		}
+	}
 	if(error_list.size()>0){
 		printf("在%s：\n",path.c_str());
 		for(int i=0;i<error_list.size();i++){
@@ -1673,7 +1763,7 @@ int main(int argc,char* argv[]){
 	if(argc>1){
 		string on=string(argv[1]);
 		if(on=="-h"){
-			printf("Lapc by hacklinjiuyue v1.36a\n--------------------\n  lapc -h for help\n  lapc x.lap x.lapm to compile the file\n--------------------\n");
+			printf("Lapc by hacklinjiuyue v1.4a\n--------------------\n  lapc -h for help\n  lapc x.lap x.lapm to compile the file\n--------------------\n");
 		}
 		else{
 			//string t,int c=-1,vector<var> arg=vector<var>(),vector<Token> i=vector<Token>(),vector<int> len=vector<int>(),int ID=0
@@ -1698,6 +1788,12 @@ int main(int argc,char* argv[]){
 			TypeMap["DLLHandle"]="6";
 			TypeMap["NativeFunction"]="7";
 			Compile_file(argv[1],argv[2]);
+			if(!warn_list.empty()){
+				printf("在%s：\n",argv[1]);
+				for(int i=0;i<warn_list.size();i++){
+					printf("%s\n",warn_list[i].c_str());
+				}
+			}
 			if(error_list.size()>0){
 				printf("在%s：\n",argv[1]);
 				for(int i=0;i<error_list.size();i++){

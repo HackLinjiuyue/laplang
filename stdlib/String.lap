@@ -1,0 +1,29 @@
+function string SubStr(string s,int start,int len)
+	local int max StrLen(s)
+	local int i 0
+	local string temp ""
+	when i<len
+		if start==max
+			break
+		set temp temp+s[start]
+		call Inc(start)
+		call Inc(i)
+	return temp
+
+function Array Split(string s,string c)
+	local int i 0
+	local int max StrLen(s)
+	local int size StrLen(c)
+	local Array temp Array(0)
+	local string onstr ""
+	when i<max
+		if SubStr(s,i,size)==c
+			call PushValue(temp,onstr)
+			set i i+size
+			set onstr ""
+		else
+			set onstr onstr+s[i]
+		call Inc(i)
+	if onstr!=""
+		call PushValue(temp,onstr)
+	return temp

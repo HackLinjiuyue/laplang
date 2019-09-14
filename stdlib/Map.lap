@@ -1,0 +1,59 @@
+function Array Map()
+	local Array temp Array(2)//基对象
+	call SetArray(temp,0,Array(256))//值对列表
+	call SetArray(temp,1,Array(0))//键名表
+	local int i 0
+	when i<256
+		call SetArray(temp[0],i,Array(0))
+		Inc(i)
+	return temp
+
+function int GetCode(string str)
+	local int i 0
+	local int max StrLen(str)
+	local int temp 0
+	when i<max
+		set temp temp+Asc(str[i])
+		Inc(i)
+	if temp<0
+		return Opposite(temp/max)
+	return temp/max
+
+function bool Map_Add(Array map,string key,Object value)//值对：Array(2) t/f来辨别是否成功
+	local int code GetCode(key)
+	local int i 0
+	local Array arr map[0][code]
+	local int max Len(arr)
+	local Array pair Array(0)
+	call PushValue(pair,key,value)
+	when i<max
+		if arr[i][0]==key
+			break
+		Inc(i)
+	if i==max
+		call PushValue(arr,pair)
+		return true
+	return false
+
+function Object Map_Get(Array map,string key)
+	local int code GetCode(key)
+	local int i 0
+	local Array arr map[0][code]
+	local int max Len(arr)
+	when i<max
+		if arr[i][0]==key
+			return arr[i][1]
+		Inc(i)
+	return null
+
+function bool Map_Remove(Array map,string key)
+	local int code GetCode(key)
+	local int i 0
+	local Array arr map[0][code]
+	local int max Len(arr)
+	when i<max
+		if arr[i][0]==key
+			call RemoveValue(arr,i)
+			return true
+		Inc(i)
+	return false

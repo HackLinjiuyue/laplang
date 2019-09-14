@@ -1,0 +1,101 @@
+#path "stdlib/"
+
+import "Math"
+
+function string ItoS(int num)
+	if num==0
+		return "0"
+	local string temp ""
+	local bool is_negative false
+	local string Numbers "0123456789"
+	if num<0
+		set num Opposite(num)
+		set is_negative true
+	when num>0
+		set temp Numbers[num%10]+temp
+		set num num/10
+	if is_negative
+		return "-"+temp
+	return temp
+
+function string FtoS(float num)
+	if num==0.0
+		return "0"
+	local string temp ""
+	local bool is_negative false
+	local string Numbers "0123456789"
+	local int p 1
+	local int on_num 0
+	local int pp 0
+	if Int(num)<0
+		set num Opposite(num)
+		set is_negative true
+	local int on Int(num)
+	when on>0
+		set temp Numbers[on%10]+temp
+		set on on/10
+	set temp temp+"."
+	set num num-Float(Int(num))
+	when num-Float(Int(num))
+		set num num*10.0
+		set pp p
+		if pp==1
+			set on_num Int(num)%10
+		else
+			when pp>1
+				set on_num Int(num)%pp
+				set pp pp/10
+		set temp temp+Numbers[on_num]
+		set p p*10
+	if is_negative
+		return "-"+temp
+	return temp
+
+function bool ItoB(int num)
+	if num==0
+		return false
+	return true
+
+function bool FtoB(float num)
+	if num==0.0
+		return false
+	return true
+
+function int StoI(string s)
+	local int i 0
+	local int temp 0
+	local int sign 1
+	local bool is_negative false
+	if s[0]=="-"
+		set is_negative true
+		set i 1
+		set sign 负(sign)
+	local int max StrLen(s)
+	when i<max
+		set temp temp+(Asc(s[i])-48)*QuickPower(10,max-i-1)
+		Inc(i)
+	return temp*sign
+
+function float StoF(string s)
+	local int i 0
+	local float temp 0.0
+	local int sign 1
+	local int p 0
+	local bool is_negative false
+	if s[0]=="-"
+		set is_negative true
+		set i 1
+		set sign 负(sign)
+	local int max StrLen(s)
+	when p<max
+		if s[p]=="."
+			break
+		Inc(p)
+	when i<p
+		set temp temp+Float((Asc(s[i])-48)*QuickPower(10,p-i-1))
+		Inc(i)
+	call Inc(i)
+	when i<max
+		set temp temp+Float(Asc(s[i])-48)*pow(0.1,Float(i-p))
+		Inc(i)
+	return temp*Float(sign)

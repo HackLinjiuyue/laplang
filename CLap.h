@@ -21,9 +21,9 @@ typedef struct LapObject{
 	void *Value;
 	int Type;
 	int Size;
-	int Protect;
 	int MaxSize;
 	int Ref;
+	void* Ori;
 }LapObject;
 
 LapObject *CreateObject(int type,int size,void* value){
@@ -32,8 +32,8 @@ LapObject *CreateObject(int type,int size,void* value){
 	temp->Size=size;
 	temp->Value=value;
 	temp->MaxSize=4;
-	temp->Protect=0;
 	temp->Ref=0;
+	temp->Ori=NULL;
 	char onstr[1];
 	int i=0;
 	if(value==NULL){
@@ -52,7 +52,6 @@ LapObject *CreateObject(int type,int size,void* value){
 		break;
 		case 4:
 		temp->Property=(LapObject**)calloc(size,sizeof(LapObject*));
-		temp->Protect=1;
 		break;
 		default:
 		temp->Value=value;
@@ -66,15 +65,16 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 	LapObject* temp=NULL;
 	if(obj!=NULL){
 		int size=obj->Size,i=0;
-		int type;
-		if(obj->Protect){
+		int type=obj->Type;
+		if(type==4){
 			temp=obj;
 			obj->Ref++;
 		}
 		else{
 			temp=CreateObject(obj->Type,size,NULL);
 			temp->Ref=1;
-			switch(obj->Type){
+			temp->Ori=obj->Value;
+			switch(type){
 			case 0:
 			*(int*)temp->Value=*(int*)obj->Value;
 			break;
@@ -86,16 +86,6 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 			break;
 			case 3:
 			*(int*)temp->Value=*(int*)obj->Value;
-			break;
-			case 4:
-			for(;i<size;i++){
-				if(obj->Property[i]==NULL){
-					continue;
-				}
-				temp->Property[i]->Protect=0;
-				temp->Property[i]=CreateObjectFromObject(obj->Property[i]);
-				temp->Property[i]->Protect=1;
-			}
 			break;
 			default:
 			temp->Value=obj->Value;
@@ -141,10 +131,11 @@ void PrintData(LapObject *obj){
 		}
 		break;
 		case 4:
-		for(;i<obj->Size;i++){
+		for(;i<obj->Size-1;i++){
 			PrintData(obj->Property[i]);
 			printf(",");
 		}
+		PrintData(obj->Property[i]);
 		break;
 		case 5:
 		printf("File");
