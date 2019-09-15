@@ -119,14 +119,14 @@ LapState *InitVM(char* path,LapObject* arg){
 	temp->Argv=arg;
 	temp->Stack=(LapObject**)calloc(20,sizeof(LapObject*));
 	temp->ConstVars=(LapObject**)malloc(sizeof(LapObject*[20]));
-    temp->VarStacks=(LapObject***)malloc(sizeof(LapObject**[10]));
+    temp->VarStacks=(LapObject***)malloc(sizeof(LapObject**[8]));
     temp->VarStacks[0]=(LapObject**)calloc(20,sizeof(LapObject*));
     temp->MaxVar=(int*)malloc(sizeof(int[8]));
     temp->VarNum=(int*)malloc(sizeof(int[8]));
     temp->PCStack=(int*)malloc(sizeof(int[8]));
     temp->Commands=(char***)malloc(sizeof(char**[20]));
     temp->StackPC=1;
-    temp->MaxStackPC=10;
+    temp->MaxStackPC=8;
     int i=0;
 	temp->MaxVar[0]=20;
 	temp->VarNum[0]=0;
@@ -703,23 +703,23 @@ void SetVar(LapState *env,int sign){
 
 void Jump(LapState *env,int sign){
 	int *line=NULL;
+	--env->Index;
 	if(sign){
-		if(*(int*)env->Stack[0]->Value){
+		if(*(int*)env->Stack[env->Index]->Value){
 			line=ParseInt(env->Commands[env->PC][1]);
 			env->PC=*line-2;
 			free(line);
 		}
 	}
 	else{
-		if(!*(int*)env->Stack[0]->Value){
+		if(!*(int*)env->Stack[env->Index]->Value){
 			line=ParseInt(env->Commands[env->PC][1]);
 			env->PC=*line-2;
 			free(line);
 		}
 	}
-	--env->Index;
-	FreeObject(env->Stack[0]);
-	env->Stack[0]=NULL;
+	FreeObject(env->Stack[env->Index]);
+	env->Stack[env->Index]=NULL;
 }
 
 void Goto(LapState *env){
@@ -741,10 +741,11 @@ void Goto(LapState *env){
 		int i=env->MaxStackPC-1;
 		env->MaxStackPC+=8;
 		int max=i+8;
-		env->VarNum=(int*)realloc(env->VarNum,sizeof(int[max]));
+		size_t size=sizeof(int[max]);
 		env->VarStacks=(LapObject***)realloc(env->VarStacks,sizeof(LapObject**[max]));
-		env->MaxVar=(int*)realloc(env->MaxVar,sizeof(int[max]));
-		env->PCStack=(int*)realloc(env->PCStack,sizeof(int[max]));
+		env->PCStack=(int*)realloc(env->PCStack,size);
+		env->VarNum=(int*)realloc(env->VarNum,size);
+		env->MaxVar=(int*)realloc(env->MaxVar,size);
 		for(;i<max;++i){
 			env->VarNum[i]=0;
 			env->MaxVar[i]=12;

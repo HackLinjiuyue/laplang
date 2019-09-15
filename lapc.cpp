@@ -315,7 +315,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 		else if(Is_in_s(Bool,&onstr,2)){
 			last_type="bool";
 		}
-		if(onget[0]=='\n'){
+		if(onget[0]=='\n'||onget[0]=='\r'){
 			if(onstr.length()>0){
 				if(onstr[0]=='"'){
 					last_type="string";
@@ -1673,7 +1673,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 			out.push_back(Ins("pop"));
 		}
 		else{
-			if(token.Value!="local"&&token.Value!="global"){
+			if(token.Value!="local"&&token.Value!="global"&&token.Value!="\n"){
 				error_list.push_back("错误："+Position(token.line,token.byte)+" 指令'"+token.Value+"'无效");
 				break;
 			}
