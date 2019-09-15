@@ -112,14 +112,14 @@ LapState *InitVM(char* path,LapObject* arg){
 	temp->Argv=arg;
 	temp->Stack=(LapObject**)calloc(20,sizeof(LapObject*));
 	temp->ConstVars=(LapObject**)malloc(sizeof(LapObject*[20]));
-    temp->VarStacks=(LapObject***)malloc(sizeof(LapObject**[1]));
+    temp->VarStacks=(LapObject***)malloc(sizeof(LapObject**[10]));
     temp->VarStacks[0]=(LapObject**)calloc(20,sizeof(LapObject*));
     temp->MaxVar=(int*)malloc(sizeof(int[8]));
     temp->VarNum=(int*)malloc(sizeof(int[8]));
     temp->PCStack=(int*)malloc(sizeof(int[8]));
     temp->Commands=(char***)malloc(sizeof(char**[20]));
     temp->StackPC=1;
-    temp->MaxStackPC=2;
+    temp->MaxStackPC=10;
     int i=0;
 	temp->MaxVar[0]=20;
 	temp->VarNum[0]=0;
@@ -313,18 +313,18 @@ void PushConst(LapState *env){
 
 void PushVar(LapState *env,int sign){
     char** ins=env->Commands[env->PC];
-    int *i=ParseInt(ins[1]);
+    int *i=ParseInt(ins[1]),n=*i;
+    free(i);
     ExtendStack(env);
     switch(sign){
 	case 'l':
-		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[env->StackPC-1][*i]);
+		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[env->StackPC-1][n]);
 		break;
 	case 'g':
-		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[0][*i]);
+		env->Stack[env->Index]=CreateObjectFromObject(env->VarStacks[0][n]);
 		break;
     }
     ++env->Index;
-    free(i);
 }
 
 void Pop(LapState *env){
@@ -615,8 +615,7 @@ void Print(LapState *env){
 		}
 	}
     PrintData(obj);
-    FreeObject(obj);
-    env->Stack[env->Index]=NULL;
+    ++env->Index;
 }
 
 void GetCommandArg(LapState *env){
@@ -628,31 +627,36 @@ void GetCommandArg(LapState *env){
 
 void StoreVar(LapState *env,int sign){
     char** ins=env->Commands[env->PC];
-    int *i=ParseInt(ins[1]),PC=env->StackPC-1;
+    int *p=ParseInt(ins[1]),i=*p,PC=env->StackPC-1;
+    free(p);
     switch(sign){
 	case 'l':
-		if(*i>env->MaxVar[PC]-1){
+		if(i>env->MaxVar[PC]-1){
 			env->MaxVar[PC]+=20;
-			env->VarStacks[PC]=(LapObject**)realloc(env->VarStacks[PC],sizeof(LapObject*[env->MaxVar[PC]]));
+			env->VarStacks[PC]=(LapObject**)realloc(env->VarStacks[PC],sizeof(LapObject*[env->MaxVar[PC]+1]));
 		}
+
 		++env->VarNum[PC];
-        env->VarStacks[PC][*i]=CreateObjectFromObject(env->Stack[0]);
-        ++env->VarStacks[PC][*i]->Ref;
+		env->VarStacks[PC][i]=CreateObjectFromObject(env->Stack[0]);
+		if(env->Stack[0]!=NULL){
+        	++env->VarStacks[PC][i]->Ref;
+		}
 		break;
 	case 'g':
-		if(*i>env->MaxVar[0]-1){
+		if(i>env->MaxVar[0]-1){
 			env->MaxVar[0]+=20;
 			env->VarStacks[0]=(LapObject**)realloc(env->VarStacks[0],sizeof(LapObject*[env->MaxVar[0]]));
 		}
 		++env->VarNum[0];
-        env->VarStacks[0][*i]=CreateObjectFromObject(env->Stack[0]);
-        ++env->VarStacks[0][*i]->Ref;
+		env->VarStacks[0][i]=CreateObjectFromObject(env->Stack[0]);
+		if(env->Stack[0]!=NULL){
+        	++env->VarStacks[0][i]->Ref;
+		}
 		break;
     }
     --env->Index;
-    FreeObject(env->Stack[0]);
+	FreeObject(env->Stack[0]);
     env->Stack[0]=NULL;
-    free(i);
 }
 
 void SetVar(LapState *env,int sign){
@@ -738,8 +742,9 @@ void Goto(LapState *env){
 			env->VarStacks[i]=NULL;
 		}
 	}
-	env->VarStacks[env->StackPC-1]=(LapObject**)calloc(n,sizeof(LapObject*));
+	env->VarStacks[env->StackPC-1]=(LapObject**)calloc(n+1,sizeof(LapObject*));
 	env->VarNum[env->StackPC-1]=n;
+	env->MaxVar[env->StackPC-1]=n;
 	LapObject** var=env->VarStacks[env->StackPC-1];
 	v=0;
 	line=ParseInt(ins[1]);
@@ -769,6 +774,9 @@ void Return(LapState *env){
 	}
 	free(var);
 	env->VarNum[PC]=0;
+	if(env->Stack[env->Index-1]!=NULL){
+		++env->Stack[env->Index-1]->Ref;
+	}
 }
 
 void Asc(LapState *env){
@@ -781,10 +789,9 @@ void Asc(LapState *env){
 
 void Len(LapState *env){
 	LapObject *obj=env->Stack[env->Index-1];
-	int *x=malloc(sizeof(int));
-	*x=obj->Size;
+	env->Stack[env->Index-1]=CreateObject(0,0,NULL);
+	*(int*)env->Stack[env->Index-1]->Value=obj->Size;
 	FreeObject(obj);
-	env->Stack[env->Index-1]=CreateObject(0,0,x);
 }
 
 void Fgetc(LapState *env){//所有文件操作确保至少绑定在一个变量上
@@ -1193,9 +1200,21 @@ void Float(LapState *env){
 	op1->Value=on;
 }
 
+void Type(LapState *env){
+	LapObject *op1=env->Stack[env->Index-1];
+	env->Stack[env->Index-1]=CreateObject(0,0,NULL);
+	*(int*)env->Stack[env->Index-1]->Value=op1->Type;
+	FreeObject(op1);
+}
+
 void DoIns(LapState *env){//use ' ' to separate parms
 	char** ins=env->Commands[env->PC];
-	//printf("%d %s\n",env->PC,ins[0]);
+	//printf("%d %s %s\n\n",env->PC,ins[0],ins[1]);
+	/*if(env->PC>218&&env->PC<230){
+		printf("%d %s %s ",env->PC,ins[0],ins[1]);
+		PrintData(env->VarStacks[env->StackPC-1][1]);
+		printf("\n");
+	}*/
     if(StringCmp(ins[0],"add_const_int")){//1 str for int
         AddConst(env,0);
     }
@@ -1396,6 +1415,9 @@ void DoIns(LapState *env){//use ' ' to separate parms
     }
     else if(StringCmp(ins[0],"ref_call")){
 		ReflectCall(env);
+    }
+    else if(StringCmp(ins[0],"type")){
+		Type(env);
     }
     else{//小于0虚拟机问题 大于0编程问题
 		env->Err=-1;

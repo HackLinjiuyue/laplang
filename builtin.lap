@@ -30,3 +30,4 @@ function void Println(Object value)
 	Print(value)
 	Print("\n")
 	return
+interface int Type(Object obj)

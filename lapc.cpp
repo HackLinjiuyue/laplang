@@ -19,6 +19,7 @@ enum LapType{
 bool is_reflect=false;
 
 using namespace std;
+string last_face="";
 map<string,string> TypeMap;
 //定义部分
 class var{
@@ -37,7 +38,7 @@ vector<int> if_stack;
 
 const string Symbols[31]={")","(","+","-","*","/","%",">","<","=","!=",">=","<=","^","<<",">>","&&","||","{","}","==",".","!","//","/*","*/","[","]",",","&","|"};
 
-const string KeyWords[16]={"interface","function","return","if","break","continue","when","import","else","local","global","set","call","delete","#path","#reflect"};
+const string KeyWords[17]={"interface","function","return","if","break","continue","when","import","else","local","global","set","call","delete","#path","#reflect","while"};
 
 const string Basic_type[10]={"int","float","bool","string","void","Array","File","DLLHandle","Object","NativeFunction"};
 
@@ -109,6 +110,8 @@ public:
 		args=a;
 		is_local=is_l;
 		is_builtin=b;
+	};
+	function(){
 	}
 };
 
@@ -303,7 +306,7 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 			linshi="";
 			continue;
 		}
-		else if(Is_in_s(KeyWords,&onstr,16)){
+		else if(Is_in_s(KeyWords,&onstr,17)){
 			last_type="keyword";
 			if(onstr=="function"){
 				is_func=true;
@@ -873,7 +876,7 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 				}
 				size=op.sub.size();
 				if(op.Value=="PushValue"){
-					over=2;
+					over=1;
 					if(size<2){
 						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/"+Tostring(Fiter->second.args.size()));
 						return "";
@@ -925,6 +928,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					else if(op.Value=="Int"){
 						out.push_back(Ins("int"));
+					}
+					else if(op.Value=="Type"){
+						out.push_back(Ins("type"));
 					}
 					else if(op.Value=="Float"){
 						out.push_back(Ins("float"));
@@ -1035,6 +1041,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 	if(s.size()>1){
 		error_list.push_back("错误："+Position(op.line,op.byte)+" 表达式中缺少运算符");
 		return "";
+	}
+	if(s[0].Type=="NativeFunction"&&exp[0].Value!="DLLGetFunction"){
+		last_face=exp[0].Value;
 	}
 	return s[0].Type;
 }
@@ -1183,7 +1192,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					}
 					i++;
 					next=tokens[i];
-					if(Is_in_s(KeyWords,&next.Value,16)){
+					if(Is_in_s(KeyWords,&next.Value,17)){
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 函数名不能为关键字");
 						break;
 					}
@@ -1257,7 +1266,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					}
 					i++;
 					next=tokens[i];
-					if(Is_in_s(KeyWords,&next.Value,16)){
+					if(Is_in_s(KeyWords,&next.Value,17)){
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 接口函数名不能为关键字");
 						break;
 					}
@@ -1328,9 +1337,8 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
                 i++;
                 exp=vector<Token>();
                 exp.push_back(tokens[i]);
-				if(Parse_exp(exp,false,domains[tab],tab==0,true)!="void"){
-					out.push_back(Ins("pop"));
-				}
+				Parse_exp(exp,false,domains[tab],tab==0,true);
+				out.push_back(Ins("pop"));
                     if(!error_list.empty()){
 						break;
                     }
@@ -1494,7 +1502,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				c_path=token.Value;
 			}
-			else if(token.Value=="when"){
+			else if(token.Value=="when"||token.Value=="while"){
 				int cha;
 				i++;
 				exp=vector<Token>();
@@ -1583,7 +1591,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				i++;
 				next=tokens[i];
-				if(Is_in_s(KeyWords,&next.Value,16)){
+				if(Is_in_s(KeyWords,&next.Value,17)){
 					error_list.push_back("错误："+Position(next.line,next.byte)+" 变量名不能为关键字");
 					break;
 				}
@@ -1643,6 +1651,10 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					error_list.push_back("错误："+Position(line,byte)+" 变量'"+next.Value+"'类型与表达式的类型不匹配 "+type.Value+"/"+o_t);
 					break;
 				}
+				if(o_t=="NativeFunction"&&next.Value!=last_face&&last_face!=""){
+					functions[next.Value]=functions[last_face];
+					last_face="";
+				}
 				out.push_back(Ins("store_var_"+type.Type,Tostring(posi)));
 			}
 			else{
@@ -1654,9 +1666,11 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 		else if(token.Type=="callbox"){
 			exp=vector<Token>();
 			exp.push_back(token);
-			if(Parse_exp(exp,false,give,tab==0,true)!="void"){
-				out.push_back(Ins("pop"));
+			Parse_exp(exp,false,domains[tab],tab==0,true);
+			if(!error_list.empty()){
+				break;
 			}
+			out.push_back(Ins("pop"));
 		}
 		else{
 			if(token.Value!="local"&&token.Value!="global"){

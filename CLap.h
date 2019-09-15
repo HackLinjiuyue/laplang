@@ -173,6 +173,9 @@ void FreeObject(LapObject *obj){
 			else{
 				if(obj->Type==4){
 					for(;i<size;i++){
+					if(obj->Property[i]==NULL){
+						continue;
+					}
 					FreeObject(obj->Property[i]);
 					}
 					free(obj->Property);

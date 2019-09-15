@@ -32,6 +32,7 @@ function bool Map_Add(Array map,string key,Object value)//÷µ∂‘£∫Array(2) t/f¿¥±Ê
 		Inc(i)
 	if i==max
 		call PushValue(arr,pair)
+		call PushValue(map[1],key)
 		return true
 	return false
 
@@ -50,10 +51,18 @@ function bool Map_Remove(Array map,string key)
 	local int code GetCode(key)
 	local int i 0
 	local Array arr map[0][code]
+	local Array k_t map[1]
 	local int max Len(arr)
+	local int p 0
+	local int m Len(k_t)
 	when i<max
 		if arr[i][0]==key
 			call RemoveValue(arr,i)
+			when p<m
+				if k_t[p]==key
+					call RemoveValue(k_t,p)
+					break
+				call Inc(p)
 			return true
 		Inc(i)
 	return false
