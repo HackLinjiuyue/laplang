@@ -1,4 +1,9 @@
-#include<windows.h>
+#ifdef __MINGW32__
+	#include<windows.h>
+#else
+	#include<dlfcn.h>
+#endif
+
 #include<math.h>
 #include<string.h>
 
@@ -79,6 +84,8 @@ char** SplitIns(char* str,int is_three){
     return temp;
 }
 
+int StartVM(LapState *env);
+
 int* GetIns(char**** on,FILE* fp,int ref){
     char* onstr=NULL;
     int MaxPC=20,TruePC=0;
@@ -139,7 +146,7 @@ LapState *InitVM(char* path,LapObject* arg){
 	return temp;
 }
 
-void DeleteState(LapState *state){
+void DeleteState(LapState *state,int is_main){
 	int i=0,max=state->ConstNum;
     for(;i<max;++i){
 		FreeObject(state->ConstVars[i]);
@@ -170,7 +177,9 @@ void DeleteState(LapState *state){
     free(state->PCStack);
     free(state->Commands);
     free(state->Stack);
-    FreeObject(state->Argv);
+    if(!is_main){
+    	FreeObject(state->Argv);
+    }
     free(state);
 }
 
@@ -1077,7 +1086,11 @@ void ArrayRemove(LapState *env){//配合引用使用
 void Dlopen(LapState *env){//动态库系列全部结合引用使用
 	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
-	void* temp=LoadLibrary((char*)op1->Value);
+	#ifdef __MINGW32__
+		void* temp=LoadLibrary((char*)op1->Value);
+	#else
+		void* temp=dlopen((char*)op1->Value,RTLD_LAZY);
+	#endif
 	if(temp==NULL){
 		env->Err=5;
 		env->Onstr=op1->Value;
@@ -1095,7 +1108,11 @@ void Dlsym(LapState *env){
 	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
 	char* str=(char*)op2->Value;
-	void* temp=GetProcAddress(op1->Value,str);//函数的Size必须写明参数 不支持动态参数
+	#ifdef __MINGW32__
+		void* temp=GetProcAddress(op1->Value,str);//函数的Size必须写明参数 不支持动态参数
+	#else
+		void* temp=dlsym(op1->Value,str);
+	#endif
 	if(temp==NULL){
 		env->Err=7;
 		env->Onstr=op2->Value;
@@ -1134,7 +1151,11 @@ void CallNative(LapState *env){
 void Dlclose(LapState *env){
 	--env->Index;
 	LapObject *op1=env->Stack[env->Index];
-	FreeLibrary(op1->Value);
+	#ifdef __MINGW32__
+		FreeLibrary(op1->Value);
+	#else
+		dlclose(op1->Value);
+	#endif
 	free(op1);
 	env->Stack[env->Index]=NULL;
 }
@@ -1177,7 +1198,7 @@ void Exec(LapState *env){//配合引用使用
 	}
 	StartVM(state);
 	env->Err=state->Err;
-	DeleteState(state);
+	DeleteState(state,0);
 	env->Stack[env->Index]=NULL;
 }
 
@@ -1500,7 +1521,7 @@ int main(int argc,char* argv[]){
 		}
 	}
 	args->Ref=0;
-	DeleteState(env);
+	DeleteState(env,1);
 	if(is_reflect){
 		int i=0;
 		for(;i<r_size;i++){
