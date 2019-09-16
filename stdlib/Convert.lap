@@ -1,6 +1,11 @@
-#path "stdlib/"
-
-import "Math"
+function int QuickPower(int x,int y)
+	local int ans 1
+	while y
+		if y&1
+			set ans ans*x
+		set x x*x
+		set y y>>1
+	return ans
 
 function string ItoS(int num)
 	if num==0
@@ -96,6 +101,6 @@ function float StoF(string s)
 		Inc(i)
 	call Inc(i)
 	when i<max
-		set temp temp+Float(Asc(s[i])-48)*pow(0.1,Float(i-p))
+		set temp temp+Float(Asc(s[i])-48)/Float(QuickPower(10,i-p))
 		Inc(i)
 	return temp*Float(sign)
