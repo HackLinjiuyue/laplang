@@ -910,6 +910,7 @@ void ReflectCall(LapState *env){
 	if(i==r_size){
 		env->Err=10;
 		env->Onstr=onstr;
+		free(op1);
 		return;
 	}
 	else{
@@ -1220,6 +1221,50 @@ void Type(LapState *env){
 	FreeObject(op1);
 }
 
+void ReflectGetValue(LapState *env){
+	LapObject *op1=env->Stack[env->Index-1];
+	int i=0;
+	char* onstr=op1->Value;
+	for(;i<r_size;i++){
+		if(StringCmp(reflect[i][0],onstr)){
+			break;
+		}
+	}
+	if(i==r_size){
+		env->Err=11;
+		env->Onstr=onstr;
+		free(op1);
+		return;
+	}
+	int *p=ParseInt(reflect[i][1]);
+	env->Stack[env->Index-1]=CreateObjectFromObject(env->VarStacks[0][*p]);
+	free(p);
+	FreeObject(op1);
+}
+
+void Input(LapState *env){
+	ExtendStack(env);
+	char onget=getch();
+	char *onstr=calloc(8,sizeof(char));
+	int onsize=0;
+	int max=8;
+	while(onget!='\n'&&onget!='\r'){
+		if(onsize==max-1){
+			max+=8;
+			onstr=realloc(onstr,sizeof(char[max]));
+			memset(onstr+max-8,0,8);
+		}
+		if(onget==8&&!onsize){
+			onstr[--onsize]=0;
+		}
+		else{
+			onstr[onsize++]=onget;
+		}
+		onget=getch();
+	}
+	env->Stack[env->Index++]=CreateObject(2,onsize,onstr);
+}
+
 void DoIns(LapState *env){//use ' ' to separate parms
 	char** ins=env->Commands[env->PC];
 	//printf("%d %s %s Stack:%d\n\n",env->PC,ins[0],ins[1],env->Index);
@@ -1429,8 +1474,14 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(StringCmp(ins[0],"ref_call")){
 		ReflectCall(env);
     }
+    else if(StringCmp(ins[0],"ref_get")){
+		ReflectGetValue(env);
+    }
     else if(StringCmp(ins[0],"type")){
 		Type(env);
+    }
+    else if(StringCmp(ins[0],"input")){
+		Input(env);
     }
     else{//小于0虚拟机问题 大于0编程问题
 		env->Err=-1;
@@ -1510,6 +1561,10 @@ int main(int argc,char* argv[]){
 			printf("Err:Reflection function '%s' Not Exist or arg number error!\n",env->Onstr);
 			free(env->Onstr);
 			break;
+		case 11:
+			printf("Err:Reflection var '%s' Not Exist!\n",env->Onstr);
+			free(env->Onstr);
+			break;
 		}
 	}
 	args->Ref=0;
@@ -1519,10 +1574,11 @@ int main(int argc,char* argv[]){
 		for(;i<r_size;i++){
 			free(reflect[i][0]);
 			free(reflect[i][1]);
-			free(reflect[i][2]);
+			if(reflect[i][2]!=NULL){
+				free(reflect[i][2]);
+			}
 			free(reflect[i]);
 		}
 		free(reflect);
 	}
-	system("pause");
 }

@@ -883,6 +883,12 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					arr_push=true;
 				}
+				else if(op.Value=="Reflect_GetValue"){
+					if(!is_reflect){
+						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'不能在未启用反射的情况下使用");
+						return "";
+					}
+				}
 				else if(op.Value=="Reflect_CallFunction"){
 					if(!is_reflect){
 						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'不能在未启用反射的情况下使用");
@@ -925,6 +931,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					else if(op.Value=="File"){
 						out.push_back(Ins("open_file"));
+					}
+					else if(op.Value=="Input"){
+						out.push_back(Ins("input"));
 					}
 					else if(op.Value=="Int"){
 						out.push_back(Ins("int"));
@@ -973,6 +982,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					else if(op.Value=="Reflect_CallFunction"){
 						out.push_back(Ins("ref_call",Tostring(op.sub.size()-1)));
+					}
+					else if(op.Value=="Reflect_GetValue"){
+						out.push_back(Ins("ref_get"));
 					}
 					else if(op.Value=="PopValue"){
 						out.push_back(Ins("arr_pop"));
@@ -1271,8 +1283,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						break;
 					}
                     if(functions.find(next.Value)!=functions.end()){
-						error_list.push_back("错误："+Position(next.line,next.byte)+" 接口函数'"+next.Value+"'不允许重复定义");
-						break;
+						warn_list.push_back("警告："+Position(next.line,next.byte)+" 接口函数'"+next.Value+"'重复定义");
                     }
                     token=next;
                     m=token.sub.size();
@@ -1880,6 +1891,13 @@ int main(int argc,char* argv[]){
 					fputs(Tostring(iter->second.args.size()).c_str(),fp);
 					fputs(" ",fp);
 					fputs(Tostring(iter->second.is_interface).c_str(),fp);
+					fputs("\n",fp);
+				}
+				map<string,var>::iterator viter;
+				for(viter=domains[0].begin();viter!=domains[0].end();viter++){
+					fputs(viter->first.c_str(),fp);
+					fputs(" ",fp);
+					fputs(Tostring(viter->second.id).c_str(),fp);
 					fputs("\n",fp);
 				}
 				fclose(fp);

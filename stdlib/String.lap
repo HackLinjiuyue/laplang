@@ -23,7 +23,7 @@ function Array Split(string s,string c)
 			set onstr ""
 		else
 			set onstr onstr+s[i]
-		call Inc(i)
+			call Inc(i)
 	if onstr!=""
 		call PushValue(temp,onstr)
 	return temp
