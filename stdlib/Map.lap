@@ -3,9 +3,6 @@ function Array Map()
 	call SetArray(temp,0,Array(256))//值对列表
 	call SetArray(temp,1,Array(0))//键名表
 	local int i 0
-	when i<256
-		call SetArray(temp[0],i,Array(0))
-		Inc(i)
 	return temp
 
 function int GetCode(string str)
@@ -21,6 +18,8 @@ function int GetCode(string str)
 
 function bool Map_Add(Array map,string key,Object value)//值对：Array(2) t/f来辨别是否成功
 	local int code GetCode(key)
+	if IsNull(map[0][code])
+		call SetArray(map[0],code,Array(0))
 	local int i 0
 	local Array arr map[0][code]
 	local int max Len(arr)
@@ -38,6 +37,8 @@ function bool Map_Add(Array map,string key,Object value)//值对：Array(2) t/f来辨
 
 function Object Map_Get(Array map,string key)
 	local int code GetCode(key)
+	if IsNull(map[0][code])
+		return null
 	local int i 0
 	local Array arr map[0][code]
 	local int max Len(arr)
@@ -49,8 +50,10 @@ function Object Map_Get(Array map,string key)
 
 function bool Map_Remove(Array map,string key)
 	local int code GetCode(key)
-	local int i 0
+	if IsNull(map[0][code])
+		return false
 	local Array arr map[0][code]
+	local int i 0
 	local Array k_t map[1]
 	local int max Len(arr)
 	local int p 0

@@ -648,9 +648,6 @@ void StoreVar(LapState *env,int sign){
 
 		++env->VarNum[PC];
 		env->VarStacks[PC][i]=CreateObjectFromObject(env->Stack[env->Index]);
-		if(env->Stack[env->Index]!=NULL){
-        	++env->VarStacks[PC][i]->Ref;
-		}
 		break;
 	case 'g':
 		if(i>env->MaxVar[0]-1){
@@ -659,9 +656,6 @@ void StoreVar(LapState *env,int sign){
 		}
 		++env->VarNum[0];
 		env->VarStacks[0][i]=CreateObjectFromObject(env->Stack[env->Index]);
-		if(env->Stack[env->Index]!=NULL){
-        	++env->VarStacks[0][i]->Ref;
-		}
 		break;
     }
 	FreeObject(env->Stack[env->Index]);
@@ -764,7 +758,6 @@ void Goto(LapState *env){
 		--env->Index;
 		if(env->Stack[env->Index]!=NULL){
 			var[n-v-1]=CreateObjectFromObject(env->Stack[env->Index]);
-			++var[n-v-1]->Ref;
 			FreeObject(env->Stack[env->Index]);
 			env->Stack[env->Index]=NULL;
 		}
@@ -785,9 +778,6 @@ void Return(LapState *env){
 	}
 	free(var);
 	env->VarNum[PC]=0;
-	if(env->Stack[env->Index-1]!=NULL){
-		++env->Stack[env->Index-1]->Ref;
-	}
 	//printf("%p\n",env->Stack[0]);
 }
 
@@ -1534,5 +1524,5 @@ int main(int argc,char* argv[]){
 		}
 		free(reflect);
 	}
-	//system("pause");
+	system("pause");
 }

@@ -52,6 +52,7 @@ LapObject *CreateObject(int type,int size,void* value){
 		break;
 		case 4:
 		temp->Property=(LapObject**)calloc(size,sizeof(LapObject*));
+		temp->Ref=1;
 		break;
 		default:
 		temp->Value=value;
@@ -72,8 +73,8 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 		}
 		else{
 			temp=CreateObject(obj->Type,size,NULL);
-			temp->Ref=1;
 			temp->Ori=obj->Value;
+			temp->Ref=1;
 			switch(type){
 			case 0:
 			*(int*)temp->Value=*(int*)obj->Value;
@@ -131,11 +132,15 @@ void PrintData(LapObject *obj){
 		}
 		break;
 		case 4:
+		printf("[");
 		for(;i<obj->Size-1;i++){
 			PrintData(obj->Property[i]);
 			printf(",");
 		}
-		PrintData(obj->Property[i]);
+		if(obj->Size){
+			PrintData(obj->Property[i]);
+		}
+		printf("]");
 		break;
 		case 5:
 		printf("File");
@@ -184,7 +189,8 @@ void FreeObject(LapObject *obj){
 			free(obj);
 		}
 		else{
-			if(!--obj->Ref){
+			--obj->Ref;
+			if(!obj->Ref){
 				FreeObject(obj);
 			}
 		}
