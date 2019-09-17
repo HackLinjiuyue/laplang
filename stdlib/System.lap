@@ -1,0 +1,3 @@
+local DLLHandle Lib_System DLLOpen("stdlib/System.dll")
+local NativeFunction system DLLGetFunction(Lib_System,"System")
+interface int system(string arg)

@@ -1,4 +1,4 @@
-local DLLHandle Lib_Math DLLOpen("./Math.dll")
+local DLLHandle Lib_Math DLLOpen("stdlib/Math.dll")
 local NativeFunction floor DLLGetFunction(Lib_Math,"Floor")
 local NativeFunction QuickPower DLLGetFunction(Lib_Math,"QuickPower")
 local NativeFunction pow DLLGetFunction(Lib_Math,"Pow")
