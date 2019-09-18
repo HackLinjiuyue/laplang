@@ -1209,8 +1209,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						break;
 					}
                     if(functions.find(next.Value)!=functions.end()){
-						error_list.push_back("错误："+Position(next.line,next.byte)+" 函数'"+next.Value+"'不允许重复定义");
-						break;
+						warn_list.push_back("警告："+Position(next.line,next.byte)+" 函数'"+next.Value+"'重复定义");
                     }
                     token=next;
                     int m=token.sub.size();
@@ -1348,8 +1347,9 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
                 i++;
                 exp=vector<Token>();
                 exp.push_back(tokens[i]);
-				Parse_exp(exp,false,domains[tab],tab==0,true);
-				out.push_back(Ins("pop"));
+				if(Parse_exp(exp,false,domains[tab],tab==0,true)!="void"){
+					out.push_back(Ins("pop"));
+				}
                     if(!error_list.empty()){
 						break;
                     }
@@ -1423,9 +1423,6 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					if(!error_list.empty()){
 						return i;
 					}
-				}
-				else{
-					out.push_back(Ins("push_null"));
 				}
 				is_return=true;
 				out.push_back(Ins("return"));
@@ -1677,11 +1674,13 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 		else if(token.Type=="callbox"){
 			exp=vector<Token>();
 			exp.push_back(token);
-			Parse_exp(exp,false,domains[tab],tab==0,true);
+
+			if(Parse_exp(exp,false,domains[tab],tab==0,true)!="void"){
+				out.push_back(Ins("pop"));
+			}
 			if(!error_list.empty()){
 				break;
 			}
-			out.push_back(Ins("pop"));
 		}
 		else{
 			if(token.Value!="local"&&token.Value!="global"&&token.Value!="\n"){
