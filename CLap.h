@@ -34,7 +34,6 @@ LapObject *CreateObject(int type,int size,void* value){
 	temp->MaxSize=4;
 	temp->Ref=0;
 	temp->Ori=NULL;
-	char onstr[1];
 	int i=0;
 	if(value==NULL){
 		switch(type){
@@ -157,7 +156,8 @@ void PrintData(LapObject *obj){
 
 void FreeObject(LapObject *obj){
 	if(obj!=NULL){
-		if(!obj->Ref){
+		//printf("ref %d\n",obj->Ref);
+		if(obj->Ref<1){
 			int type=obj->Type,size=obj->Size,i=0;
 			if(obj->Value!=NULL){
 				switch(type){
@@ -190,7 +190,7 @@ void FreeObject(LapObject *obj){
 		}
 		else{
 			--obj->Ref;
-			if(!obj->Ref){
+			if(obj->Ref<1){
 				FreeObject(obj);
 			}
 		}

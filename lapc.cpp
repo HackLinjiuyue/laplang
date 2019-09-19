@@ -980,9 +980,6 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					else if(op.Value=="PushValue"){
 						out.push_back(Ins("arr_push",Tostring(op.sub.size()-1)));
 					}
-					else if(op.Value=="Reflect_CallFunction"){
-						out.push_back(Ins("ref_call",Tostring(op.sub.size()-1)));
-					}
 					else if(op.Value=="Reflect_GetValue"){
 						out.push_back(Ins("ref_get"));
 					}
@@ -1081,37 +1078,42 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 		if(tokens[i].Value[0]=='\n'){
 			continue;
 		}
-		tab=0;
-		while(tokens[i].Value[0]=='\t'){
-			tab++;
-			i++;
-		}
-		m=domains.size();
-		if(tab>m-1){
-			for(;m-1<tab;m++){
-				if(innerFX){
-					domains.push_back(give);
-					var_num.push_back(give.size());
+		if(tokens[i].Value!=","){
+			tab=0;
+			while(tokens[i].Value[0]=='\t'){
+				tab++;
+				i++;
+			}
+			m=domains.size();
+			if(tab>m-1){
+				for(;m-1<tab;m++){
+					if(innerFX){
+						domains.push_back(give);
+						var_num.push_back(give.size());
+					}
+					else{
+						domains.push_back(domains[m-1]);
+						var_num.push_back(0);
+					}
 				}
-				else{
-					domains.push_back(domains[m-1]);
-					var_num.push_back(0);
+			}
+			else{
+				for(;tab<m-1;m--){
+					domains.pop_back();
+					var_num.pop_back();
 				}
+			}
+			if(tab<=tab_num){
+				if(bk){
+					bk=i;
+				}
+				i-=tab;
+				ssize--;
+				return i;
 			}
 		}
 		else{
-			for(;tab<m-1;m--){
-				domains.pop_back();
-				var_num.pop_back();
-			}
-		}
-		if(tab<=tab_num){
-			if(bk){
-				bk=i;
-			}
-			i-=tab;
-			ssize--;
-			return i;
+			i++;
 		}
 		token=tokens[i];
 		if(token.Value=="\n"){

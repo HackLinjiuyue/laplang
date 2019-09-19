@@ -4,7 +4,6 @@
 	#include<dlfcn.h>
 #endif
 
-#include<math.h>
 #include<string.h>
 
 #include "CLap.h"
@@ -239,7 +238,7 @@ double* ParseFloat(char* str){
     ++i;
     l=1;
     while(str[i]>0){
-		*temp+=(str[i]-'0')*pow(0.1,l);
+		*temp+=(str[i]-'0')/QuickPower(10,l);
 		++l;
 		++i;
     }
@@ -533,6 +532,7 @@ void Calculate(LapState *env,int sign){
 			break;
 		case 4:
 			temp=CreateObjectFromObject(op1->Property[n]);
+			--op1->Ref;
 			break;
 		}
 		break;
@@ -594,6 +594,7 @@ void IsNull(LapState *env){
 		*p=1;
 	}
 	else{
+		FreeObject(op1);
 		*p=0;
 	}
 	env->Stack[env->Index-1]=CreateObject(3,0,p);
@@ -614,17 +615,9 @@ void Ops(LapState *env){
 
 void Print(LapState *env){
 	--env->Index;
-	LapObject *obj=NULL,*op1=env->Stack[env->Index];
-	if(op1!=NULL){
-		if(op1->Type>3){
-			obj=CreateObjectFromObject(op1);
-		}
-		else{
-			obj=op1;
-		}
-	}
-    PrintData(obj);
-    ++env->Index;
+    PrintData(env->Stack[env->Index]);
+    FreeObject(env->Stack[env->Index]);
+    env->Stack[env->Index]=NULL;
 }
 
 void GetCommandArg(LapState *env){
@@ -669,24 +662,14 @@ void SetVar(LapState *env,int sign){
     switch(sign){
 	case 'l':
 		if(env->VarStacks[PC][*i]!=NULL){
-			if(env->VarStacks[PC][*i]->Type==Lobject){
-				env->VarStacks[PC][*i]=env->Stack[env->Index];
-			}
-			else{
-				FreeObject(env->VarStacks[PC][*i]);
-				env->VarStacks[PC][*i]=CreateObjectFromObject(env->Stack[env->Index]);
-			}
+			FreeObject(env->VarStacks[PC][*i]);
+			env->VarStacks[PC][*i]=CreateObjectFromObject(env->Stack[env->Index]);
 		}
 		break;
 	case 'g':
 		if(env->VarStacks[0][*i]!=NULL){
-			if(env->VarStacks[0][*i]->Type==Lobject){
-				env->VarStacks[0][*i]=env->Stack[env->Index];
-			}
-			else{
-				FreeObject(env->VarStacks[0][*i]);
-				env->VarStacks[0][*i]=CreateObjectFromObject(env->Stack[env->Index]);
-			}
+			FreeObject(env->VarStacks[0][*i]);
+			env->VarStacks[0][*i]=CreateObjectFromObject(env->Stack[env->Index]);
 		}
 		break;
     }
@@ -842,9 +825,6 @@ void SetProperty(LapState *env){//引用设置
 		FreeObject(op1->Property[*i]);
 	}
 	op1->Property[*i]=CreateObjectFromObject(op2);
-	if(op2->Type>3){
-		++op2->Ref;
-	}
 	FreeObject(op2);
 	free(i);
 	env->Stack[env->Index]=NULL;
@@ -866,9 +846,6 @@ void SetIndex(LapState *env){//引用设置
 		FreeObject(op1->Property[index]);
 	}
 	op1->Property[index]=CreateObjectFromObject(op3);
-	if(op3->Type>3){
-		++op3->Ref;
-	}
 	FreeObject(op2);
 	FreeObject(op3);
 	env->Stack[env->Index]=NULL;
@@ -896,7 +873,7 @@ void ArrayPush(LapState *env){//配合引用使用
 	}
 	env->Stack[env->Index]=NULL;
 }
-
+/*
 void ReflectCall(LapState *env){
 	int *p=ParseInt(env->Commands[env->PC][1]),n=*p;//获取参数个数
 	LapObject *op1=env->Stack[env->Index-n-1];//获取到字符串
@@ -945,6 +922,7 @@ void ReflectCall(LapState *env){
 		//((LapObject*(*)(LapObject*))(op1->Value))(arg)
 		op2=env->VarStacks[0][var_index];
 		env->Stack[env->Index++]=((LapObject*(*)(LapObject*))(op2->Value))(op1);
+		op1->Ref=0;
 		FreeObject(op1);
 	}
 	else{
@@ -987,7 +965,6 @@ void ReflectCall(LapState *env){
 			--env->Index;
 			if(env->Stack[env->Index]!=NULL){
 				var[n-v-1]=CreateObjectFromObject(env->Stack[env->Index]);
-				++var[n-v-1]->Ref;
 				FreeObject(env->Stack[env->Index]);
 				env->Stack[env->Index]=NULL;
 			}
@@ -995,7 +972,7 @@ void ReflectCall(LapState *env){
 		--env->Index;
 	}
 	free(p);
-}
+}*/
 
 void ArrayPop(LapState *env){//配合引用使用
 	--env->Index;
@@ -1020,9 +997,6 @@ void ArrayFill(LapState *env){//配合引用使用
 			FreeObject(op1->Property[i]);
 		}
 		op1->Property[i]=CreateObjectFromObject(op2);
-	}
-	if(op2->Type>3){
-		++op2->Ref;
 	}
 	FreeObject(op2);
 	env->Stack[env->Index]=NULL;
@@ -1134,7 +1108,6 @@ void CallNative(LapState *env){
 			continue;
 		}
 		arg->Property[max-i-1]=CreateObjectFromObject(env->Stack[env->Index]);
-		++arg->Property[max-i-1]->Ref;
 		FreeObject(env->Stack[env->Index]);
 	}
 	env->Stack[env->Index]=((LapObject*(*)(LapObject*))(op1->Value))(arg);
@@ -1200,7 +1173,7 @@ void Int(LapState *env){
 	LapObject *op1=env->Stack[env->Index-1];
 	op1->Type=0;
 	int *on=malloc(sizeof(int));
-	*on=floor(*(double*)op1->Value);
+	*on=(int)(*(double*)op1->Value);
 	free((double*)op1->Value);
 	op1->Value=on;
 }
@@ -1241,7 +1214,7 @@ void ReflectGetValue(LapState *env){
 	free(p);
 	FreeObject(op1);
 }
-
+/*
 void Input(LapState *env){
 	ExtendStack(env);
 	char onget=getch();
@@ -1263,6 +1236,18 @@ void Input(LapState *env){
 		onget=getch();
 	}
 	env->Stack[env->Index++]=CreateObject(2,onsize,onstr);
+}*/
+
+void Input(LapState *env){
+	ExtendStack(env);
+	char *onstr=calloc(300,sizeof(char));
+	fgets(onstr,300,stdin);
+	int size=StrLen(onstr);
+	char *temp=calloc(size,sizeof(char));
+	onstr[size-1]=0;
+	strcpy(temp,onstr);
+	free(onstr);
+	env->Stack[env->Index++]=CreateObject(2,size-1,temp);
 }
 
 void DoIns(LapState *env){//use ' ' to separate parms
@@ -1471,9 +1456,6 @@ void DoIns(LapState *env){//use ' ' to separate parms
     else if(StringCmp(ins[0],"call_native")){
 		CallNative(env);
     }
-    else if(StringCmp(ins[0],"ref_call")){
-		ReflectCall(env);
-    }
     else if(StringCmp(ins[0],"ref_get")){
 		ReflectGetValue(env);
     }
@@ -1581,4 +1563,5 @@ int main(int argc,char* argv[]){
 		}
 		free(reflect);
 	}
+	system("pause");
 }

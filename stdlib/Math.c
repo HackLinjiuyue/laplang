@@ -6,23 +6,6 @@ LapObject* Floor(LapObject* args){
 	*(double*)temp->Value=floor(*(double*)args->Property[0]->Value);
 	return temp;
 }
-LapObject* QuickPower(LapObject* args){
-	LapObject* temp=CreateObject(0,0,malloc(sizeof(int)));
-    int ans=1,x=*(int*)args->Property[0]->Value,y=*(int*)args->Property[1]->Value;
-    while(y)
-    {
-        if(y&1)
-        {
-            ans*=x;
-        }
-        x*=x;
-        y>>=1;
-    }
-
-	*(int*)temp->Value=ans;
-	return temp;
-}
-
 LapObject* Pow(LapObject* args){
 	LapObject* temp=CreateObject(1,0,malloc(sizeof(double)));
 	*(double*)temp->Value=pow(*(double*)args->Property[0]->Value,*(double*)args->Property[1]->Value);
