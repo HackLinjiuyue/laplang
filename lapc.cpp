@@ -484,16 +484,16 @@ vector<Token> Trans_exp(vector<Token>& token_list)//by奔跑的小蜗牛 优化�
 	while (cur < size)
 	{
 		//cout<<token_list[cur].Type<<" "<<token_list[cur].Value<<endl;
-		if (token_list[cur].Value == "(")
+		if (token_list[cur].Value == "("&&token_list[cur].Type!="string")
 		{
 			s.push(token_list[cur]);
 		}
 
-		else if (token_list[cur].Value == ")") //弹出内容直到遇到第一个左括号
+		else if (token_list[cur].Value == ")"&&token_list[cur].Type=="op") //弹出内容直到遇到第一个左括号
 		{
 			while (!s.empty())
 			{
-				if(s.top().Value == "("){
+				if(s.top().Value == "("&&s.top().Type!="string"){
 					break;
 				}
 				out.push_back(s.top());
@@ -535,12 +535,16 @@ vector<Token> Fold(vector<Token> &token_list){
 	bool is_return=false;
 	for(int i=0;i<token_list.size();i++){
 		token=token_list[i];
+		if(token.Type=="break"){
+			temp.push_back(token);
+			continue;
+		}
 		//cout<<token.Type<<" "<<token.Value<<endl;
-		if(token.Value=="/*"){
+		if(token.Value=="/*"&&token.Type=="op"){
 			i++;
 			for(;i<token_list.size();i++){
 				token=token_list[i];
-				if(token.Value=="*/"){
+				if(token.Value=="*/"&&token.Type=="op"){
 					break;
 				}
 			}
@@ -549,7 +553,7 @@ vector<Token> Fold(vector<Token> &token_list){
 				break;
 			}
 		}
-		else if(token.Value=="*/"){
+		else if(token.Value=="*/"&&token.Type=="op"){
 			error_list.push_back("错误："+Position(line,byte)+" 注释语句缺少起始符'/*'");
 			break;
 		}
@@ -565,10 +569,10 @@ vector<Token> Fold(vector<Token> &token_list){
 			i++;
 			for(;i<token_list.size();i++){
 				token=token_list[i];
-				if(token.Value=="("){
+				if(token.Value=="("&&(token.Type=="call"||token.Type=="op")){
 					kh++;
 				}
-				else if(token.Value==")"){
+				else if(token.Value==")"&&token.Type=="op"){
 					kh--;
 				}
 				if(kh==0){
@@ -577,7 +581,7 @@ vector<Token> Fold(vector<Token> &token_list){
 					}
 					break;
 				}
-				else if(token.Value==","&&kh==1){
+				else if(token.Value==","&&kh==1&&token.Type=="op"){
 					arg_list->push_back(Token("arg",name,line,byte,Fold(*arg)));
 					delete arg;
 					arg=new vector<Token>();
@@ -594,7 +598,7 @@ vector<Token> Fold(vector<Token> &token_list){
 			delete arg_list;
 			delete arg;
 		}
-		else if(token.Value=="("){
+		else if(token.Value=="("&&token.Type=="op"){
 			i++;
 			temp.push_back(token);
 			line=token.line;
@@ -603,10 +607,10 @@ vector<Token> Fold(vector<Token> &token_list){
 			arg=new vector<Token>();
 			for(;i<token_list.size();i++){
 				token=token_list[i];
-				if(token.Value=="("){
+				if(token.Value=="("&&(token.Type=="call"||token.Type=="op")){
 					kh++;
 				}
-				else if(token.Value==")"){
+				else if(token.Value==")"&&token.Type=="op"){
 					kh--;
 				}
 				if(kh==0){
@@ -625,7 +629,7 @@ vector<Token> Fold(vector<Token> &token_list){
 			temp.push_back(Token("op",")",token.line,token.byte));
 			delete arg;
 		}
-		else if(token.Value=="["){
+		else if(token.Value=="["&&token.Type=="op"){
 			kh=1;
 			arg=new vector<Token>();
 			line=token.line;
@@ -633,10 +637,10 @@ vector<Token> Fold(vector<Token> &token_list){
 			i++;
 			for(;i<token_list.size();i++){
 				token=token_list[i];
-				if(token.Value=="["){
+				if(token.Value=="["&&token.Type=="op"){
 					kh++;
 				}
-				else if(token.Value=="]"){
+				else if(token.Value=="]"&&token.Type=="op"){
 					kh--;
 				}
 				if(kh==0){
@@ -657,17 +661,19 @@ vector<Token> Fold(vector<Token> &token_list){
 		}
 		else{
 			if(i>0&&i<token_list.size()-1){
-				if(token_list[i-1].Type=="int"&&token.Value=="."&&token_list[i+1].Type=="int"){
-					temp.pop_back();
-					token.Type="float";
-					token.Value=token_list[i-1].Value+"."+token_list[i+1].Value;
-					i++;
+				if(token.Value=="."){
+					if(token_list[i-1].Type=="int"&&token_list[i+1].Type=="int"){
+						temp.pop_back();
+						token.Type="float";
+						token.Value=token_list[i-1].Value+"."+token_list[i+1].Value;
+						i++;
+					}
 				}
 			}
 			temp.push_back(token);
 		}
 		if(error_list.size()>0){
-			break;
+			return temp;
 		}
 	}
 	return temp;
@@ -703,7 +709,7 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 	for(;i<max;i++){
 		op=exp[i];
 		if(op.Type==""){
-			break;
+			continue;
 		}
 		if(op.Type=="tab"){
 			continue;
@@ -1676,7 +1682,6 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 		else if(token.Type=="callbox"){
 			exp=vector<Token>();
 			exp.push_back(token);
-
 			if(Parse_exp(exp,false,domains[tab],tab==0,true)!="void"){
 				out.push_back(Ins("pop"));
 			}
@@ -1788,6 +1793,7 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false,bool is_
 				}
 			}
 		}
+
 	}
 	if(error_list.empty()){
 		token_list=Fold(token_list);
@@ -1876,24 +1882,6 @@ int main(int argc,char* argv[]){
 				string p=string(argv[2]);
 				p+=".ref";
 				FILE *fp=fopen(p.c_str(),"w+");
-				for(iter=functions.begin();iter!=functions.end();iter++){
-					if(iter->second.is_builtin){
-						continue;
-					}
-					fputs(iter->first.c_str(),fp);
-					fputs(" ",fp);
-					if(iter->second.is_interface){
-						fputs(Tostring(iter->second.line).c_str(),fp);
-					}
-					else{
-						fputs(Tostring(iter->second.line-2).c_str(),fp);
-					}
-					fputs(" ",fp);
-					fputs(Tostring(iter->second.args.size()).c_str(),fp);
-					fputs(" ",fp);
-					fputs(Tostring(iter->second.is_interface).c_str(),fp);
-					fputs("\n",fp);
-				}
 				map<string,var>::iterator viter;
 				for(viter=domains[0].begin();viter!=domains[0].end();viter++){
 					fputs(viter->first.c_str(),fp);
