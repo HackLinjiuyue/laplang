@@ -121,6 +121,10 @@ int GetIns(int*** on,FILE* fp,int ref){
 			*on=(int**)realloc(*on,sizeof(int*[MaxPC]));
         }
         (*on)[TruePC]=SplitIns(onstr,ref);
+        if((*on)[TruePC][0]>62){
+			printf("Err:unrecognized ins %d\n",(*on)[TruePC][0]);
+			return 0;
+        }
         ++TruePC;
         free(onstr);
     }
@@ -865,7 +869,7 @@ void Fgetc(LapState *env){//所有文件操作确保至少绑定在一个变量�
 void Fwrite(LapState *env){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	fputs((char*)op2->Value,(FILE*)op1->Value);
+	fputs(op2->Value,(FILE*)op1->Value);
 	free(op1);
 	FreeObject(op2);
 	env->Stack[env->Index]=NULL;
@@ -1203,12 +1207,7 @@ int StartVM(LapState *env){
 	int id;
 	for(;env->PC<max;++env->PC){
 		//printf("%s %d %d\n",dbg_str[env->Commands[env->PC][0]],env->Commands[env->PC][1],env->Commands[env->PC][2],env->Commands[env->PC][3]);
-		id=env->Commands[env->PC][0];
-		if(id>62){
-			printf("Err:unrecognized ins %d\n",id);
-			return 0;
-		}
-        (Ins[id])(env);
+        (Ins[env->Commands[env->PC][0]])(env);
         if(env->Err){
 			break;
         }
@@ -1232,11 +1231,11 @@ int main(int argc,char* argv[]){
 		FreeObject(args);
 		return -1;
 	}
-	/*
+/*
 	clock_t start, finish;
 	double  duration;
 	start = clock();
-	*/
+*/
 	if(StartVM(env)){
 		i=env->Err;
 		printf("%d ",env->PC+1);
@@ -1272,7 +1271,7 @@ int main(int argc,char* argv[]){
 			break;
 		}
 	}
-	/*
+/*
 	finish = clock();
 	duration = (double)(finish - start) / CLOCKS_PER_SEC;
 	printf("%f\n",duration);*/
