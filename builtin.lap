@@ -30,5 +30,4 @@ function void Println(Object value)
 	Print("\n")
 	return
 interface int Type(Object obj)
-interface Object Reflect_GetValue(string name)
 interface string Input()

@@ -31,7 +31,7 @@ LapObject *CreateObject(int type,int size,void* value){
 	temp->Type=type;
 	temp->Size=size;
 	temp->Value=value;
-	temp->MaxSize=4;
+	temp->MaxSize=size+4;
 	temp->Ref=0;
 	temp->Ori=NULL;
 	int i=0;
@@ -45,17 +45,23 @@ LapObject *CreateObject(int type,int size,void* value){
 		break;
 		case 2:
 		temp->Value=calloc(size+3,sizeof(char));
+		temp->Ref=1;
 		break;
 		case 3:
 		temp->Value=malloc(sizeof(int));
 		break;
 		case 4:
-		temp->Property=(LapObject**)calloc(size,sizeof(LapObject*));
+		temp->Property=(LapObject**)calloc(size+4,sizeof(LapObject*));
 		temp->Ref=1;
 		break;
 		default:
 		temp->Value=value;
 		//case 5:文件指针 6动态库句柄 7:原生函数
+		}
+	}
+	else{
+		if(type==2){
+			temp->Ref=1;
 		}
 	}
 	return temp;
@@ -66,7 +72,7 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 	if(obj!=NULL){
 		int size=obj->Size,i=0;
 		int type=obj->Type;
-		if(type==4){
+		if(type==4||type==2){
 			temp=obj;
 			obj->Ref++;
 		}
@@ -80,9 +86,6 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 			break;
 			case 1:
 			*(double*)temp->Value=*(double*)obj->Value;
-			break;
-			case 2:
-			strcpy((char*)temp->Value,(char*)obj->Value);
 			break;
 			case 3:
 			*(int*)temp->Value=*(int*)obj->Value;

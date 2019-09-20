@@ -69,6 +69,8 @@ string ftype="";
 
 bool bk=0,is_std=true;
 
+map<string,string> InsMap;
+
 class Ins{
 	public:
 	string Value,arg1,arg2;
@@ -78,7 +80,7 @@ class Ins{
 		arg2=a2;
 	}
 	string encode(){
-		string temp=Value;
+		string temp=InsMap[Value];
 		if(arg1!=""){
 			temp+=" "+arg1;
 		}
@@ -679,25 +681,6 @@ vector<Token> Fold(vector<Token> &token_list){
 	return temp;
 }
 
-string encodeConst(int type){
-	string temp;
-	switch(type){
-	case 0:
-		temp="int";
-	break;
-	case 1:
-		temp="float";
-	break;
-	case 3:
-		temp="bool";
-	break;
-	case 2:
-		temp="str";
-	break;
-	}
-	return "add_const_"+temp;
-}
-
 string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_global,bool is_call=false){
 	vector<Token> s;
 	map<string,function>::iterator Fiter;
@@ -889,24 +872,6 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					arr_push=true;
 				}
-				else if(op.Value=="Reflect_GetValue"){
-					if(!is_reflect){
-						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'不能在未启用反射的情况下使用");
-						return "";
-					}
-				}
-				else if(op.Value=="Reflect_CallFunction"){
-					if(!is_reflect){
-						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'不能在未启用反射的情况下使用");
-						return "";
-					}
-					over=0;
-					arr_push=true;
-					if(!size){
-						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/"+Tostring(Fiter->second.args.size()));
-						return "";
-					}
-				}
 				else if(Fiter->second.args.size()!=size){
 					error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/"+Tostring(Fiter->second.args.size()));
 					return "";
@@ -929,7 +894,7 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					return "";
 				}
 				if(!Fiter->second.is_interface){
-					out.push_back(Ins("goto",Tostring(Fiter->second.line),Tostring(size)));
+					out.push_back(Ins("goto",Tostring(Fiter->second.line-2),Tostring(size)));
 				}
 				else{
 					if(op.Value=="Len"||op.Value=="StrLen"){
@@ -1189,9 +1154,6 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				out.push_back(Ins("set_var_"+t,Tostring(iter->second.id)));
 			}
-			else if(token.Value=="#reflect"){
-				is_reflect=true;
-			}
 			else if(token.Value=="function"){
 					del_var=vector<string>();
 					if(ssize>1){
@@ -1263,7 +1225,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						error_list.push_back("错误："+Position(token.line,token.byte)+" 函数必须实现");
 						break;
                     }
-                    out[last_pos].arg1=Tostring(out.size()+1);
+                    out[last_pos].arg1=Tostring(out.size()-1);
 			}
 			else if(token.Value=="interface"){
 					if(ssize>1){
@@ -1367,7 +1329,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					error_list.push_back("错误："+Position(line,byte)+" 'continue'语句必须出现在循环体中");
 					return i;
 				}
-				out.push_back(Ins("jump",Tostring(jumpto-1)));
+				out.push_back(Ins("jump",Tostring(jumpto-3)));
 			}
 			else if(token.Value=="delete"){
 				if(inner_loop){
@@ -1489,7 +1451,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					if_stack.push_back(out.size());
 					out.push_back(Ins("jump"));
 				}
-				out[last_pos].arg1=Tostring(out.size()+1);
+				out[last_pos].arg1=Tostring(out.size()-1);
 				last_pos=tab;
 			}
 			else if(token.Value=="else"){
@@ -1506,7 +1468,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					bk=0;
 					i--;
 				}
-				out[if_stack.back()].arg1=Tostring(out.size()+1);
+				out[if_stack.back()].arg1=Tostring(out.size()-1);
 				if_stack.pop_back();
 			}
 			else if(token.Value=="#path"){
@@ -1557,14 +1519,14 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						break;
                     }
 				Parse_exp(exp,false,domains[tab],tab==0);
-				out.push_back(Ins("true_jump",Tostring(last_pos+2)));
-				out[last_pos].arg1=Tostring(out.size()+1);
+				out.push_back(Ins("true_jump",Tostring(last_pos)));
+				out[last_pos].arg1=Tostring(out.size()-1);
 				if(bk){
 					bk=0;
 					i--;
 				}
 				while(last_p.size()){
-					out[last_p.back()].arg1=Tostring(out.size()+1);
+					out[last_p.back()].arg1=Tostring(out.size()-1);
 					last_p.pop_back();
 				}
 			}
@@ -1778,18 +1740,6 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false,bool is_
 						continue;
 					}
 					consts.push_back(token);
-					if(token.Type=="int"){
-						out.push_back(Ins(encodeConst(Lint),token.Value));
-					}
-					else if(token.Type=="float"){
-						out.push_back(Ins(encodeConst(Lfloat),token.Value));
-					}
-					else if(token.Type=="bool"){
-						out.push_back(Ins(encodeConst(Lbool),token.Value));
-					}
-					else if(token.Type=="string"){
-						out.push_back(Ins(encodeConst(Lstring),token.Value));
-					}
 				}
 			}
 		}
@@ -1807,6 +1757,26 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false,bool is_
 	}
 	if(error_list.empty()&&!is_import){
 		fp=fopen(temp_name,"w+");
+		string t,v,tmp;
+		fputs((Tostring(consts.size())+"\n").c_str(),fp);
+		for(int i=0;i<consts.size();i++){
+			token=consts[i];
+			t=token.Type;
+			v=token.Value;
+			if(t=="int"){
+				tmp="0";
+			}
+			else if(t=="float"){
+				tmp="1";
+			}
+			else if(t=="string"){
+				tmp="2";
+			}
+			else if(t=="bool"){
+				tmp="3";
+			}
+			fputs((tmp+" "+v+"\n").c_str(),fp);
+		}
 		for(int i=0;i<out.size();i++){
 			fputs(out[i].encode().c_str(),fp);
 		}
@@ -1837,6 +1807,69 @@ void Import(string path,bool builtin=false){
 //
 
 int main(int argc,char* argv[]){
+	InsMap["push_const"]="0";
+	InsMap["push_var_local"]="1";
+	InsMap["push_var_global"]="2";
+	InsMap["pop"]="3";
+	InsMap["add"]="4";
+	InsMap["sub"]="5";
+	InsMap["mul"]="6";
+	InsMap["div"]="7";
+	InsMap["mod"]="8";
+	InsMap["move_left"]="9";
+	InsMap["move_right"]="10";
+	InsMap["xor"]="11";
+	InsMap["bit_and"]="12";
+	InsMap["bit_or"]="13";
+	InsMap["or"]="14";
+	InsMap["and"]="15";
+	InsMap["bigger"]="16";
+	InsMap["smaller"]="17";
+	InsMap["open_file"]="18";
+	InsMap["equal"]="19";
+	InsMap["index"]="20";
+	InsMap["not"]="21";
+	InsMap["inc"]="22";
+	InsMap["dec"]="23";
+	InsMap["is_null"]="24";
+	InsMap["ops"]="25";
+	InsMap["print"]="26";
+	InsMap["get_command_arg"]="27";
+	InsMap["store_var_local"]="28";
+	InsMap["store_var_global"]="29";
+	InsMap["set_var_local"]="30";
+	InsMap["set_var_global"]="31";
+	InsMap["true_jump"]="32";
+	InsMap["false_jump"]="33";
+	InsMap["goto"]="34";
+	InsMap["return"]="35";
+	InsMap["asc"]="36";
+	InsMap["len"]="37";
+	InsMap["fgetc"]="38";
+	InsMap["fwrite"]="39";
+	InsMap["close_file"]="40";
+	InsMap["push_obj"]="41";
+	InsMap["set_property"]="42";
+	InsMap["set_index"]="43";
+	InsMap["arr_push"]="44";
+	InsMap["arr_pop"]="45";
+	InsMap["arr_fill"]="46";
+	InsMap["arr_insert"]="47";
+	InsMap["arr_remove"]="48";
+	InsMap["dlopen"]="49";
+	InsMap["dlsym"]="50";
+	InsMap["call_native"]="51";
+	InsMap["dlclose"]="52";
+	InsMap["push_empty_str"]="53";
+	InsMap["push_arr"]="54";
+	InsMap["delete"]="55";
+	InsMap["exec"]="56";
+	InsMap["int"]="57";
+	InsMap["float"]="58";
+	InsMap["type"]="59";
+	InsMap["input"]="60";
+	InsMap["jump"]="61";
+	InsMap["push_null"]="62";
 	if(argc>1){
 		string on=string(argv[1]);
 		if(on=="-h"){
@@ -1876,20 +1909,6 @@ int main(int argc,char* argv[]){
 				for(int i=0;i<error_list.size();i++){
 					printf("%s\n",error_list[i].c_str());
 				}
-			}
-			else if(is_reflect){
-				map<string,function>::iterator iter;
-				string p=string(argv[2]);
-				p+=".ref";
-				FILE *fp=fopen(p.c_str(),"w+");
-				map<string,var>::iterator viter;
-				for(viter=domains[0].begin();viter!=domains[0].end();viter++){
-					fputs(viter->first.c_str(),fp);
-					fputs(" ",fp);
-					fputs(Tostring(viter->second.id).c_str(),fp);
-					fputs("\n",fp);
-				}
-				fclose(fp);
 			}
 			system("pause");
 		}
