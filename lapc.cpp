@@ -49,11 +49,11 @@ const string Bool[2]={"true","false"};
 
 const string Logic[]={"&&","||"};
 
-const string l1[] = { "+" , "-" };
-const string l2[] = { "*","/","<<",">>","%","~"};
-const string l3[] = { "^","&","|"};
-const string l4[] = { "||","&&" };
-const string l5[] = { "==",">","<",">=","<=","!=","!"};
+const string l1[] = { "+" , "-" };//1
+const string l2[] = { "*","/","<<",">>","%","~"};//2
+const string l3[] = { "^","&","|"};//3
+const string l4[] = { "||","&&" };//4
+const string l5[] = { "==",">","<",">=","<=","!=","!"};//5
 const string l6[] = { "@" ,"."};
 
 const string ct[4]={"int","float","bool","string"};
@@ -62,7 +62,18 @@ vector<string> error_list;
 
 set<string> depends;
 
-vector<int> last_p;
+class Po{
+public:
+	int tab,po;
+	Po(int t,int p){
+		tab=t;
+		po=p;
+	}
+};
+
+vector<Po> last_p;
+
+vector<int> l_p;
 
 string c_path;
 
@@ -995,6 +1006,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					else if(op.Value=="SetArray"){
 						out.push_back(Ins("set_index"));
 					}
+					else if(op.Value=="Fseek"){
+						out.push_back(Ins("fseek"));
+					}
 					else if(op.Value=="DLLGetFunction"){
 						if(TypeMap.find(Fiter->second.type)==TypeMap.end()){
 							out.push_back(Ins("dlsym","4"));
@@ -1083,12 +1097,14 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						domains.push_back(domains[m-1]);
 						var_num.push_back(0);
 					}
+					l_p.push_back(0);
 				}
 			}
 			else{
 				for(;tab<m-1;m--){
 					domains.pop_back();
 					var_num.pop_back();
+					l_p.pop_back();
 				}
 			}
 			if(tab<=tab_num){
@@ -1110,17 +1126,6 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 		line=token.line;
 		byte=token.byte;
 		if(token.Type=="keyword"){
-			if(bk){
-				i++;
-				while(tokens[i].Type!="keyword"){
-					if(tokens[i].Value[0]=='\n'){
-							i--;
-						break;
-					}
-					i++;
-				}
-				continue;
-			}
 			l=token.Value;
 			if(token.Value=="set"){
                 i++;
@@ -1142,7 +1147,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				exp=vector<Token>();
 				for(;i<max;i++){
 					token=tokens[i];
-					if(token.Value[0]=='\n'){
+					if(token.Type=="break"){
 						break;
 					}
 					if(token.Type=="keyword"){
@@ -1382,7 +1387,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				exp=vector<Token>();
 				for(;i<max;i++){
 					token=tokens[i];
-					if(token.Value[0]=='\n'){
+					if(token.Type=="break"){
 						break;
 					}
 					if(token.Type=="keyword"){
@@ -1419,7 +1424,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				exp=vector<Token>();
 				for(;i<max;i++){
 					token=tokens[i];
-					if(token.Value[0]=='\n'){
+					if(token.Type=="break"){
 						break;
 					}
 					if(token.Type=="keyword"){
@@ -1455,7 +1460,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					if(bk){
 					bk=0;
 					i--;
-					last_p.push_back(out.size());
+					last_p.push_back(Po(tab,out.size()));
 					out.push_back(Ins("jump"));
 				}
 				for(int f=i;f<max;f++){
@@ -1503,7 +1508,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				exp=vector<Token>();
 				for(;i<max;i++){
 					token=tokens[i];
-					if(token.Value[0]=='\n'){
+					if(token.Type=="break"){
 						break;
 					}
 					if(token.Type=="keyword"){
@@ -1542,8 +1547,11 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					bk=0;
 					i--;
 				}
-				while(last_p.size()){
-					out[last_p.back()].arg1=Tostring(out.size()-1);
+				while(!last_p.empty()){
+					if(last_p.back().tab!=tab+1){
+						break;
+					}
+					out[last_p.back().po].arg1=Tostring(out.size()-1);
 					last_p.pop_back();
 				}
 			}
@@ -1619,7 +1627,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				for(i;i<max;i++){
 					token=tokens[i];
-					if(token.Value[0]=='\n'){
+					if(token.Type=="break"){
 						break;
 					}
 					if(token.Type=="keyword"){
@@ -1682,6 +1690,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 	}
 	return i;
 }
+
 
 void Compile_file(string File_name,char* temp_name,bool is_import=false,bool is_builtin=false){
 	File_name=c_path+File_name;
@@ -1908,6 +1917,7 @@ int main(int argc,char* argv[]){
 	InsMap["input"]="60";
 	InsMap["jump"]="61";
 	InsMap["push_null"]="62";
+	InsMap["fseek"]="63";
 	if(argc>1){
 		string on=string(argv[1]);
 		if(on=="-h"){

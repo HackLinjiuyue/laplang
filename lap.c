@@ -66,7 +66,7 @@ int GetIns(int*** on,FILE* fp,int ref){
     	if(feof(fp)){
     		break;
     	}
-        if(MaxPC>62){
+        if(MaxPC>63){
 			printf("Err:unrecognized ins %d\n",MaxPC);
 			return 0;
         }
@@ -769,11 +769,26 @@ void Fgetc(LapState *env){//所有文件操作确保至少绑定在一个变量�
 }
 
 void Fwrite(LapState *env){
-	LapObject *op2=env->Stack[--env->Index];
-	LapObject *op1=env->Stack[--env->Index];
-	fputs(op2->Value,(FILE*)op1->Value);
-	free(op1);
-	FreeObject(op2);
+	LapObject *op3=env->Stack[--env->Index];//v
+	LapObject *op1=env->Stack[--env->Index];//f
+	int type=op3->Type;
+	void* value=op3->Value;
+	switch(type){
+	case 0:
+	fwrite(value,sizeof(int),1,op1->Value);
+	break;
+	case 1:
+	fwrite(value,sizeof(double),1,op1->Value);
+	break;
+	case 2:
+	fwrite(value,sizeof(char),op3->Size,op1->Value);
+	break;
+	case 3:
+	fwrite(value,sizeof(int),1,op1->Value);
+	break;
+	}
+	FreeObject(op1);
+	free(op3);
 	env->Stack[env->Index]=NULL;
 }
 
@@ -1087,14 +1102,22 @@ void PushNULL(LapState *env){
 	env->Stack[env->Index++]=NULL;
 }
 
-void(*Ins[63])(LapState*)={PushConst,PushVarLocal,PushVarGlobal,
+void Fseek(LapState *env){
+	LapObject *op2=env->Stack[--env->Index];
+	LapObject *op1=env->Stack[--env->Index];
+	fseek(op1->Value,*(int*)op2->Value,SEEK_CUR);
+	FreeObject(op1);
+	FreeObject(op2);
+}
+
+void(*Ins[64])(LapState*)={PushConst,PushVarLocal,PushVarGlobal,
 Pop,Add,Sub,Mul,Div,Mod,MoveLeft,MoveRight,BitXor,BitAnd,BitOr,
 Or,And,Bigger,Smaller,PushFile,Equal,Index,Not,Inc,Dec,IsNull,
 Ops,Print,GetCommandArg,StoreVarLocal,StoreVarGlobal,SetVarLocal,
 SetVarGlobal,True_Jump,False_Jump,Goto,Return,Asc,Len,Fgetc,Fwrite,
 CloseFile,PushObj,SetProperty,SetIndex,ArrayPush,ArrayPop,
 ArrayFill,ArrayInsert,ArrayRemove,Dlopen,Dlsym,CallNative,Dlclose,
-PushEmptyStr,PushArray,Delete,Exec,Int,Float,Type,Input,Jump,PushNULL
+PushEmptyStr,PushArray,Delete,Exec,Int,Float,Type,Input,Jump,PushNULL,Fseek
 };
 /*
 char dbg_str[63][20]={"PushConst","PushVarLocal","PushVarGlobal","Pop","Add","Sub","Mul","Div","Mod",
@@ -1102,13 +1125,13 @@ char dbg_str[63][20]={"PushConst","PushVarLocal","PushVarGlobal","Pop","Add","Su
 "Not","Inc","Dec","IsNull","Ops","Print","GetCommandArg","StoreVarLocal","StoreVarGlobal","SetVarLocal",
 "SetVarGlobal","True_Jump","False_Jump","Goto","Return","Asc","Len","Fgetc","Fwrite","CloseFile","PushObj",
 "SetProperty","SetIndex","ArrayPush","ArrayPop","ArrayFill","ArrayInsert","ArrayRemove","Dlopen","Dlsym",
-"CallNative","Dlclose","PushEmptyStr","PushArray","Delete","Exec","Int","Float","Type","Input","Jump","PushNULL"};*/
+"CallNative","Dlclose","PushEmptyStr","PushArray","Delete","Exec","Int","Float","Type","Input","Jump","PushNULL","Fseek"};*/
 
 
 int StartVM(LapState *env){
 	int max=env->TruePC;
 	for(;env->PC<max;++env->PC){
-		//printf("%s %d %d\n",dbg_str[env->Commands[env->PC][0]],env->Commands[env->PC][1],env->Commands[env->PC][2],env->Commands[env->PC][3]);
+		//printf("%d %s %d %d\n",env->PC,dbg_str[env->Commands[env->PC][0]],env->Commands[env->PC][1],env->Commands[env->PC][2]);
         (Ins[env->Commands[env->PC][0]])(env);
         if(env->Err){
 			break;
