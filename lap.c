@@ -4,8 +4,6 @@
 	#include<dlfcn.h>
 #endif
 
-#include<string.h>
-
 #include "CLap.h"
 
 //#include<time.h>

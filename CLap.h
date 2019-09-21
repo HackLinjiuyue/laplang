@@ -1,10 +1,6 @@
-#ifdef _WIN32
 #include<stdlib.h>
 #include<stdio.h>
 #include<string.h>
-#else
-#include<nostdio.h>
-#endif
 
 #define MAX_STACK 256
 #define MAX_ARG_NUM 10
