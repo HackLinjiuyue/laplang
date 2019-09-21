@@ -54,117 +54,35 @@ void ExtendStack(LapState *env){
     }
 }
 
-int* ParseInt(const char* str){
-    int max=StrLen(str);
-    int i=0,sign=1;
-    int *temp=malloc(sizeof(int));
-    *temp=0;
-    if(str[0]=='-'){
-		i=1,sign=-1;
-    }
-    for(;i<max;++i){
-		*temp+=(str[i]-'0')*QuickPower(10,max-i-1);
-    }
-    *temp*=sign;
-    return temp;
-}
-
-int* SplitIns(char* str,int is_three){
-	int len=StrLen(str)-1;
-	int* temp=malloc(sizeof(int[4]));
-    char *onstr=(char*)calloc(20,sizeof(char));
-    int i=0,index=0,k=0,max=20;
-    int *p=NULL;
-    for(;i<len;++i){
-		if(str[i]==' '){
-			index=0;
-			p=ParseInt(onstr);
-			temp[k]=*p;
-			free(p);
-			if(k==2+is_three){
-				break;
-			}
-			onstr=(char*)calloc(5,sizeof(char));
-			max=4;
-			++k;
-		}
-		else{
-			if(index==max){
-				max+=20;
-				onstr=(char*)realloc(onstr,sizeof(char[max+3]));
-				memset(onstr+max-20,0,20);
-			}
-			onstr[index]=str[i];
-			++index;
-		}
-    }
-    p=ParseInt(onstr);
-	temp[k]=*p;
-	free(p);
-    return temp;
-}
-
 int StartVM(LapState *env);
 
 int GetIns(int*** on,FILE* fp,int ref){
-    char* onstr=NULL;
-    int MaxPC=20,TruePC=0;
-    int temp;
+    int TruePC=0,*on_i;
+    int MaxPC;
+    fread(&MaxPC,sizeof(int),1,fp);
+    *on=calloc(MaxPC,sizeof(int*));
     while(1){
-        onstr=(char*)calloc(100,sizeof(100));
-        if(fgets(onstr,100,fp)==NULL){
-			free(onstr);
-			break;
-        }
-        if(TruePC==MaxPC){
-			MaxPC+=20;
-			*on=(int**)realloc(*on,sizeof(int*[MaxPC]));
-        }
-        (*on)[TruePC]=SplitIns(onstr,ref);
-        if((*on)[TruePC][0]>62){
-			printf("Err:unrecognized ins %d\n",(*on)[TruePC][0]);
+    	fread(&MaxPC,sizeof(int),1,fp);
+    	if(feof(fp)){
+    		break;
+    	}
+        if(MaxPC>62){
+			printf("Err:unrecognized ins %d\n",MaxPC);
 			return 0;
         }
-        ++TruePC;
-        free(onstr);
+        (*on)[TruePC]=calloc(3,sizeof(int));
+        on_i=(*on)[TruePC++];
+        on_i[0]=MaxPC;
+        fread(&MaxPC,sizeof(int),1,fp);
+        on_i[1]=MaxPC;
+        fread(&MaxPC,sizeof(int),1,fp);
+        on_i[2]=MaxPC;
     }
     return TruePC;
 }
 
-char* ParseStr(const char* str){
-	int max=StrLen(str);
-	char* temp=malloc(sizeof(char[max+3]));
-	memset(temp,0,sizeof(char[max+3]));
-	int i=0,index=0;
-	char lastc=-1;
-	for(;i<max;++i){
-		if(lastc=='\\'){
-			if(str[i]=='n'){
-				temp[index]='\n';
-			}
-			else if(str[i]=='b'){
-				temp[index]=' ';
-			}
-			else{
-				temp[index]=str[i];
-			}
-			++index;
-		}
-		else if(str[i]=='\\'){
-			lastc='\\';
-			continue;
-		}
-		else{
-			temp[index]=str[i];
-			++index;
-		}
-		lastc=str[i];
-	}
-	return temp;
-}
-
 LapState *InitVM(char* path,LapObject* arg){
-	FILE *fp=fopen(path,"r+");
+	FILE *fp=fopen(path,"rb+");
 	if(fp==NULL){
 		printf("File %s Not Found\n",path);
 		return NULL;
@@ -177,62 +95,46 @@ LapState *InitVM(char* path,LapObject* arg){
     temp->MaxVar=(int*)malloc(sizeof(int[8]));
     temp->VarNum=(int*)malloc(sizeof(int[8]));
     temp->PCStack=(int*)malloc(sizeof(int[8]));
-    temp->Commands=(int**)malloc(sizeof(int*[20]));
     temp->StackPC=1;
     temp->MaxStackPC=8;
     int i=0;
 	temp->MaxVar[0]=20;
 	temp->VarNum[0]=0;
     temp->Index=0;
-    temp->TruePC=0;
     temp->PC=0;
     temp->MaxIndex=20;
     temp->Err=0;
     int c_size;
-    fscanf(fp,"%d",&c_size);
-    fgetc(fp);
+    fread(&c_size,sizeof(int),1,fp);
     temp->ConstVars=(LapObject**)malloc(sizeof(LapObject*[c_size]));
     temp->ConstNum=c_size;
     void *p=NULL;
-    char t;
-    char *onstr=NULL;
-    char *s=NULL;
+    int i_temp;
     for(;i<c_size;i++){
-		t=fgetc(fp);
-		fgetc(fp);
-		switch(t){
-		case '0':
+    	fread(&i_temp,sizeof(int),1,fp);
+		switch(i_temp){
+		case 0:
 			p=malloc(sizeof(int));
-			fscanf(fp,"%d",p);
+			fread(p,sizeof(int),1,fp);
 			temp->ConstVars[i]=CreateObject(0,0,p);
 			break;
-		case '1':
+		case 1:
 			p=malloc(sizeof(double));
-			fscanf(fp,"%f",p);
+			fread(p,sizeof(double),1,fp);
 			temp->ConstVars[i]=CreateObject(1,0,p);
 			break;
-		case '2':
-            onstr=calloc(300,sizeof(char));
-            fscanf(fp,"%s",onstr);
-            s=ParseStr(onstr);
-            free(onstr);
-            temp->ConstVars[i]=CreateObject(2,StrLen(s),s);
+		case 2:
+            fread(&i_temp,sizeof(int),1,fp);
+            p=calloc(i_temp+1,sizeof(char));
+            fread(p,sizeof(char),i_temp,fp);
+            temp->ConstVars[i]=CreateObject(2,i_temp,p);
 			break;
-		case '3':
+		case 3:
 			p=malloc(sizeof(int));
-			onstr=calloc(6,sizeof(char));
-			fscanf(fp,"%s",onstr);
-			if(StringCmp(onstr,"true")){
-				*(int*)p=1;
-			}
-			else{
-				*(int*)p=0;
-			}
-			free(onstr);
+			fread(p,sizeof(int),1,fp);
 			temp->ConstVars[i]=CreateObject(3,0,p);
 			break;
 		}
-		fgetc(fp);
     }
     temp->TruePC=GetIns(&temp->Commands,fp,0);
     fclose(fp);
@@ -1108,6 +1010,7 @@ void Exec(LapState *env){
 		env->Err=-1;
 		return;
 	}
+
 	StartVM(state);
 	env->Err=state->Err;
 	DeleteState(state,0);
@@ -1204,7 +1107,6 @@ char dbg_str[63][20]={"PushConst","PushVarLocal","PushVarGlobal","Pop","Add","Su
 
 int StartVM(LapState *env){
 	int max=env->TruePC;
-	int id;
 	for(;env->PC<max;++env->PC){
 		//printf("%s %d %d\n",dbg_str[env->Commands[env->PC][0]],env->Commands[env->PC][1],env->Commands[env->PC][2],env->Commands[env->PC][3]);
         (Ins[env->Commands[env->PC][0]])(env);
@@ -1223,8 +1125,6 @@ int main(int argc,char* argv[]){
 		args->Property[i-1]=CreateObject(2,StrLen(argv[i]),argv[i]);
 	}
 	LapState *env=InitVM(argv[1],args);
-	char* onstr=ConcatStr(argv[1],".ref",StrLen(argv[1]),4);
-	FILE *ref=fopen(onstr,"r");
 	if(env==NULL){
 		printf("Init Failed\n");
 		args->Ref=0;

@@ -5,6 +5,7 @@
 #include<stack>
 #include<math.h>
 #include<set>
+#include<stdlib.h>
 
 enum LapType{
 	Lint=0,
@@ -79,15 +80,26 @@ class Ins{
 		arg1=a1;
 		arg2=a2;
 	}
-	string encode(){
+	void encode(FILE *fp){
 		string temp=InsMap[Value];
+		int v=atoi(temp.c_str());
+		fwrite(&v,sizeof(int),1,fp);
 		if(arg1!=""){
-			temp+=" "+arg1;
+			v=atoi(arg1.c_str());
+			fwrite(&v,sizeof(int),1,fp);
+		}
+		else{
+			v=0;
+			fwrite(&v,sizeof(int),1,fp);
 		}
 		if(arg2!=""){
-			temp+=" "+arg2;
+			v=atoi(arg2.c_str());
+			fwrite(&v,sizeof(int),1,fp);
 		}
-		return temp+'\n';
+		else{
+			v=0;
+			fwrite(&v,sizeof(int),1,fp);
+		}
 	}
 };
 
@@ -433,11 +445,16 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 					break;
 				}
 				if(last_get=='\\'&&onget[0]=='"'){
-					onstr+=onget[0];
+					onstr[onstr.length()-1]='"';
 					onget[0]=0;
 				}
-				else if(onget[0]==' '){
-					onstr+="\\b";
+				else if(last_get=='\\'&&onget[0]=='n'){
+					onstr[onstr.length()-1]='\n';
+					onget[0]=0;
+				}
+				else if(last_get=='\\'&&onget[0]=='r'){
+					onstr[onstr.length()-1]='\r';
+					onget[0]=0;
 				}
 				else{
 					onstr+=onget[0];
@@ -1756,29 +1773,50 @@ void Compile_file(string File_name,char* temp_name,bool is_import=false,bool is_
 		//语法解析
 	}
 	if(error_list.empty()&&!is_import){
-		fp=fopen(temp_name,"w+");
+		fp=fopen(temp_name,"wb+");
 		string t,v,tmp;
-		fputs((Tostring(consts.size())+"\n").c_str(),fp);
+		int on_i=consts.size();
+		fwrite(&on_i,sizeof(int),1,fp);
+		double f;
 		for(int i=0;i<consts.size();i++){
 			token=consts[i];
 			t=token.Type;
 			v=token.Value;
 			if(t=="int"){
-				tmp="0";
+				on_i=0;
+				fwrite(&on_i,sizeof(int),1,fp);
+				on_i=atoi(v.c_str());
+				fwrite(&on_i,sizeof(int),1,fp);
 			}
 			else if(t=="float"){
-				tmp="1";
+				on_i=1;
+				fwrite(&on_i,sizeof(int),1,fp);
+				f=atof(v.c_str());
+				fwrite(&f,sizeof(double),1,fp);
 			}
 			else if(t=="string"){
-				tmp="2";
+				on_i=2;
+				fwrite(&on_i,sizeof(int),1,fp);
+				on_i=v.length();
+				fwrite(&on_i,sizeof(int),1,fp);
+				fwrite(v.c_str(),sizeof(char),on_i,fp);
 			}
 			else if(t=="bool"){
-				tmp="3";
+				on_i=3;
+				fwrite(&on_i,sizeof(int),1,fp);
+				if(v=="true"){
+					on_i=1;
+				}
+				else{
+					on_i=0;
+				}
+				fwrite(&on_i,sizeof(int),1,fp);
 			}
-			fputs((tmp+" "+v+"\n").c_str(),fp);
 		}
+		on_i=out.size();
+		fwrite(&on_i,sizeof(int),1,fp);
 		for(int i=0;i<out.size();i++){
-			fputs(out[i].encode().c_str(),fp);
+			out[i].encode(fp);
 		}
 		fclose(fp);
 	}
@@ -1910,7 +1948,7 @@ int main(int argc,char* argv[]){
 					printf("%s\n",error_list[i].c_str());
 				}
 			}
-			system("pause");
+			//system("pause");
 		}
 	}
 }
