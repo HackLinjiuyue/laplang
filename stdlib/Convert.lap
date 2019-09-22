@@ -7,22 +7,6 @@ function int QuickPower(int x,int y)
 		set y y>>1
 	return ans
 
-function string ItoS(int num)
-	if num==0
-		return "0"
-	local string temp ""
-	local bool is_negative false
-	local string Numbers "0123456789"
-	if num<0
-		set num Opposite(num)
-		set is_negative true
-	when num>0
-		set temp Numbers[num%10]+temp
-		set num num/10
-	if is_negative
-		return "-"+temp
-	return temp
-
 function string FtoS(float num)
 	if num==0.0
 		return "0"
@@ -104,3 +88,19 @@ function float StoF(string s)
 		set temp temp+Float(Asc(s[i])-48)/Float(QuickPower(10,i-p))
 		Inc(i)
 	return temp*Float(sign)
+
+function string ItoS(int num)
+	if num==0
+		return "0"
+	local string temp ""
+	local bool is_negative false
+	local string Numbers "0123456789"
+	if num<0
+		set num Opposite(num)
+		set is_negative true
+	when num>0
+		set temp Numbers[num%10]+temp
+		set num num/10
+	if is_negative
+		return "-"+temp
+	return temp

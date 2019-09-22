@@ -1539,10 +1539,11 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
                     }
 				Parse_exp(exp,false,domains[tab],tab==0);
 				out.push_back(Ins("true_jump",Tostring(last_pos)));
-				out[last_pos].arg1=Tostring(out.size()-1);
-				if(bk){
+					if(bk){
 					bk=0;
 					i--;
+					last_p.push_back(Po(tab,out.size()));
+					out.push_back(Ins("jump"));
 				}
 				while(!last_p.empty()){
 					if(tab>=last_p.back().tab){
@@ -1551,6 +1552,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					out[last_p.back().po].arg1=Tostring(out.size()-1);
 					last_p.pop_back();
 				}
+				out[last_pos].arg1=Tostring(out.size()-1);
 			}
 			else if(token.Value=="break"){
 				if(!inner_loop){

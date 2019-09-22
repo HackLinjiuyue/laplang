@@ -325,7 +325,7 @@ void Div(LapState *env){
 	switch(type){
 	case 0:
 		temp=CreateObject(0,0,malloc(sizeof(int)));
-		*(int*)temp->Value=*(int*)op1->Value% *(int*)op2->Value;
+		*(int*)temp->Value=*(int*)op1->Value/ *(int*)op2->Value;
 		break;
 	case 1:
 		temp=CreateObject(1,0,malloc(sizeof(double)));
@@ -358,7 +358,7 @@ void Mod(LapState *env){
 	switch(type){
 	case 0:
 		temp=CreateObject(0,0,malloc(sizeof(int)));
-		*(int*)temp->Value=*(int*)op1->Value/ *(int*)op2->Value;
+		*(int*)temp->Value=*(int*)op1->Value% *(int*)op2->Value;
 		break;
 	case 1:
 		temp=CreateObject(1,0,malloc(sizeof(double)));
