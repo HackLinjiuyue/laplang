@@ -13,7 +13,8 @@ enum LapType{
 	Lobject,
 	Lfile,
 	Lhandle,
-	Lnative
+	Lnative,
+	Lfunc
 };
 
 typedef struct LapObject{
@@ -54,8 +55,6 @@ LapObject *CreateObject(int type,int size,void* value){
 		temp->Property=(LapObject**)calloc(size,sizeof(LapObject*));
 		temp->Ref=1;
 		break;
-		default:
-		temp->Value=value;
 		//case 5:文件指针 6动态库句柄 7:原生函数
 		}
 	}
@@ -67,7 +66,7 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 	if(obj!=NULL){
 		int size=obj->Size,i=0;
 		int type=obj->Type;
-		if(type==4){
+		if(type==2||(type>3)){
 			temp=obj;
 			obj->Ref++;
 		}
@@ -82,14 +81,9 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 			case 1:
 			*(double*)temp->Value=*(double*)obj->Value;
 			break;
-			case 2:
-			strcpy((char*)temp->Value,(char*)obj->Value);
-			break;
 			case 3:
 			*(int*)temp->Value=*(int*)obj->Value;
 			break;
-			default:
-			temp->Value=obj->Value;
 			}
 		}
 	}
@@ -151,6 +145,9 @@ void PrintData(LapObject *obj){
 		case Lnative:
 		printf("Lap NativeFunction");
 		break;
+		case Lfunc:
+		printf("Lap Function at %d",*(int*)obj->Value);
+		break;
 		}
 	}
 }
@@ -171,6 +168,9 @@ void FreeObject(LapObject *obj){
 				free((char*)obj->Value);
 				break;
 				case 3:
+				free((int*)obj->Value);
+				break;
+				case Lfunc:
 				free((int*)obj->Value);
 				break;
 				}

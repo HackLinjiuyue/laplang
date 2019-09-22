@@ -27,9 +27,21 @@ class var{
 	public:
 	int id;
 	string type;
-	var(int i,string t){
+	vector<string> args;
+	bool is_interface,is_std;
+	var(int i,string t,vector<string> tl=vector<string>(),bool is=false,bool it=false){
 		id=i;
 		type=t;
+		args=tl;
+		is_interface=is;
+		is_std=it;
+	}
+	var(){
+		id=0;
+		is_interface=false;
+		type="";
+		args=vector<string>();
+		is_std=false;
 	}
 };
 
@@ -120,31 +132,9 @@ vector<Ins> out;
 
 stringstream stream;
 
-class function{
-public:
-	int line;
-	bool is_interface;
-	bool is_local;
-	bool is_builtin;
-	string type;
-	vector<var> args;
-	function(int l,bool i,string t,vector<var> a,bool is_l=false,bool b=false){
-		line=l;
-		is_interface=i;
-		type=t;
-		args=a;
-		is_local=is_l;
-		is_builtin=b;
-	};
-	function(){
-	}
-};
-
 vector<map<string,var> > domains;
 
 vector<int> var_num;
-
-map<string,function> functions;
 
 
 int digui=0,ceng=-1,reg_max,var_count=0,label_count=0,size_add=0;
@@ -721,7 +711,6 @@ vector<Token> Fold(vector<Token> &token_list){
 
 string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_global,bool is_call=false){
 	vector<Token> s;
-	map<string,function>::iterator Fiter;
 	int i=0,max=exp.size(),x,m;
 	Token op1,op2,op;
 	string next_type,is_ref;
@@ -859,6 +848,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 							is_global=true;
 						}
 					}
+					else{
+						is_global=false;
+					}
 					if(is_global){
 						out.push_back(Ins("push_var_global",Tostring(iter->second.id)));
 						is_global=false;
@@ -870,15 +862,24 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 				}
 			}
 			else if(op.Type=="callbox"){//动参不进行安全检查
-				Fiter=functions.find(op.Value);
+				iter=domain.find(op.Value);
 				bool arr_push=false;
 				int over=99999;
-				if(Fiter==functions.end()){
-					error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'未定义");
-					return "";
+				if(iter==domain.end()){
+					iter=domains[0].find(op.Value);
+					if(iter==domains[0].end()){
+						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数指针'"+op.Value+"'未定义");
+						return "";
+					}
+					else{
+						is_global=true;
+					}
+				}
+				else{
+					is_global=false;
 				}
 				if(!is_call){
-					if(Fiter->second.type=="void"){
+					if(iter->second.type=="void"){
 						error_list.push_back("错误："+Position(op.line,op.byte)+" 'void'类型的函数'"+op.Value+"'不能参与计算");
 						return "";
 					}
@@ -887,13 +888,13 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 				if(op.Value=="PushValue"){
 					over=1;
 					if(size<2){
-						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/"+Tostring(Fiter->second.args.size()));
+						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/2+");
 						return "";
 					}
 					arr_push=true;
 				}
-				else if(Fiter->second.args.size()!=size){
-					error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/"+Tostring(Fiter->second.args.size()));
+				else if(iter->second.args.size()!=size){
+					error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数数量与定义的不匹配 "+Tostring(size)+"/"+Tostring(iter->second.args.size()));
 					return "";
 				}
 				for(int v=0;v<size;v++){
@@ -905,124 +906,128 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					if(arr_push&&v>over){
 						continue;
 					}
-					if(next_type!=Fiter->second.args[v].type&&Fiter->second.args[v].type!="Object"&&next_type!="Object"){
-						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数"+Tostring(v+1)+"类型与定义的不匹配 "+next_type+"/"+Fiter->second.args[v].type);
+					if(next_type!=iter->second.args[v]&&iter->second.args[v]!="Object"&&next_type!="Object"){
+						error_list.push_back("错误："+Position(op.line,op.byte)+" 函数'"+op.Value+"'调用所给定的参数"+Tostring(v+1)+"类型与定义的不匹配 "+next_type+"/"+iter->second.args[v]);
 						return "";
 					}
 				}
 				if(!error_list.empty()){
 					return "";
 				}
-				if(!Fiter->second.is_interface){
-					out.push_back(Ins("goto",Tostring(Fiter->second.line-2),Tostring(size)));
-				}
-				else{
-					if(op.Value=="Len"||op.Value=="StrLen"){
-						out.push_back(Ins("len"));
-					}
-					else if(op.Value=="File"){
-						out.push_back(Ins("open_file"));
-					}
-					else if(op.Value=="SetString"){
-						out.push_back(Ins("setstr"));
-					}
-					else if(op.Value=="Input"){
-						out.push_back(Ins("input"));
-					}
-					else if(op.Value=="Int"){
-						out.push_back(Ins("int"));
-					}
-					else if(op.Value=="Type"){
-						out.push_back(Ins("type"));
-					}
-					else if(op.Value=="Float"){
-						out.push_back(Ins("float"));
-					}
-					else if(op.Value=="IsNull"){
-						out.push_back(Ins("is_null"));
-					}
-					else if(op.Value=="Opposite"||op.Value=="负"){
-						out.push_back(Ins("ops"));
-					}
-					else if(op.Value=="Fgetc"){
-						out.push_back(Ins("fgetc"));
-					}
-					else if(op.Value=="Fclose"){
-						out.push_back(Ins("close_file"));
-					}
-					else if(op.Value=="Fwrite"){
-						out.push_back(Ins("fwrite"));
-					}
-					else if(op.Value=="Asc"){
-						out.push_back(Ins("asc"));
-					}
-					else if(op.Value=="Inc"){
-						out.push_back(Ins("inc"));
-					}
-					else if(op.Value=="Dec"){
-						out.push_back(Ins("dec"));
-					}
-					else if(op.Value=="Print"){
-						out.push_back(Ins("print"));
-					}
-					else if(op.Value=="Array"){
-						out.push_back(Ins("push_arr"));
-					}
-					else if(op.Value=="FillArray"){
-						out.push_back(Ins("arr_fill"));
-					}
-					else if(op.Value=="PushValue"){
-						out.push_back(Ins("arr_push",Tostring(op.sub.size()-1)));
-					}
-					else if(op.Value=="Reflect_GetValue"){
-						out.push_back(Ins("ref_get"));
-					}
-					else if(op.Value=="PopValue"){
-						out.push_back(Ins("arr_pop"));
-					}
-					else if(op.Value=="InsertValue"){
-						out.push_back(Ins("arr_insert"));
-					}
-					else if(op.Value=="RemoveValue"){
-						out.push_back(Ins("arr_remove"));
-					}
-					else if(op.Value=="Argv"){
-						out.push_back(Ins("get_command_arg"));
-					}
-					else if(op.Value=="Execute"){
-						out.push_back(Ins("exec"));
-					}
-					else if(op.Value=="DLLOpen"){
-						out.push_back(Ins("dlopen"));
-					}
-					else if(op.Value=="DLLClose"){
-						out.push_back(Ins("dlclose"));
-					}
-					else if(op.Value=="SetArray"){
-						out.push_back(Ins("set_index"));
-					}
-					else if(op.Value=="Fseek"){
-						out.push_back(Ins("fseek"));
-					}
-					else if(op.Value=="DLLGetFunction"){
-						if(TypeMap.find(Fiter->second.type)==TypeMap.end()){
-							out.push_back(Ins("dlsym","4"));
+				if(iter->second.is_interface){
+					if(iter->second.is_std){
+						if(op.Value=="Len"||op.Value=="StrLen"){
+							out.push_back(Ins("len"));
 						}
-						else{
-							out.push_back(Ins("dlsym",TypeMap[Fiter->second.type]));
+						else if(op.Value=="File"){
+							out.push_back(Ins("open_file"));
+						}
+						else if(op.Value=="SetString"){
+							out.push_back(Ins("setstr"));
+						}
+						else if(op.Value=="Input"){
+							out.push_back(Ins("input"));
+						}
+						else if(op.Value=="Int"){
+							out.push_back(Ins("int"));
+						}
+						else if(op.Value=="Type"){
+							out.push_back(Ins("type"));
+						}
+						else if(op.Value=="Float"){
+							out.push_back(Ins("float"));
+						}
+						else if(op.Value=="IsNull"){
+							out.push_back(Ins("is_null"));
+						}
+						else if(op.Value=="Opposite"||op.Value=="负"){
+							out.push_back(Ins("ops"));
+						}
+						else if(op.Value=="Fgetc"){
+							out.push_back(Ins("fgetc"));
+						}
+						else if(op.Value=="Fclose"){
+							out.push_back(Ins("close_file"));
+						}
+						else if(op.Value=="Fwrite"){
+							out.push_back(Ins("fwrite"));
+						}
+						else if(op.Value=="Asc"){
+							out.push_back(Ins("asc"));
+						}
+						else if(op.Value=="Inc"){
+							out.push_back(Ins("inc"));
+						}
+						else if(op.Value=="Dec"){
+							out.push_back(Ins("dec"));
+						}
+						else if(op.Value=="Print"){
+							out.push_back(Ins("print"));
+						}
+						else if(op.Value=="Array"){
+							out.push_back(Ins("push_arr"));
+						}
+						else if(op.Value=="FillArray"){
+							out.push_back(Ins("arr_fill"));
+						}
+						else if(op.Value=="PushValue"){
+							out.push_back(Ins("arr_push",Tostring(op.sub.size()-1)));
+						}
+						else if(op.Value=="Reflect_GetValue"){
+							out.push_back(Ins("ref_get"));
+						}
+						else if(op.Value=="PopValue"){
+							out.push_back(Ins("arr_pop"));
+						}
+						else if(op.Value=="InsertValue"){
+							out.push_back(Ins("arr_insert"));
+						}
+						else if(op.Value=="RemoveValue"){
+							out.push_back(Ins("arr_remove"));
+						}
+						else if(op.Value=="Argv"){
+							out.push_back(Ins("get_command_arg"));
+						}
+						else if(op.Value=="Execute"){
+							out.push_back(Ins("exec"));
+						}
+						else if(op.Value=="DLLOpen"){
+							out.push_back(Ins("dlopen"));
+						}
+						else if(op.Value=="DLLClose"){
+							out.push_back(Ins("dlclose"));
+						}
+						else if(op.Value=="SetArray"){
+							out.push_back(Ins("set_index"));
+						}
+						else if(op.Value=="Fseek"){
+							out.push_back(Ins("fseek"));
+						}
+						else if(op.Value=="DLLGetFunction"){
+							if(TypeMap.find(iter->second.type)==TypeMap.end()){
+								out.push_back(Ins("dlsym","4"));
+							}
+							else{
+								out.push_back(Ins("dlsym",TypeMap[iter->second.type]));
+							}
 						}
 					}
 					else{
-						if(Fiter->second.is_local){
-							out.push_back(Ins("push_var_local",Tostring(Fiter->second.line)));
+						if(!is_global){
+							out.push_back(Ins("push_var_local",Tostring(iter->second.id)));
 						}
 						else{
-							out.push_back(Ins("push_var_global",Tostring(Fiter->second.line)));
+							out.push_back(Ins("push_var_global",Tostring(iter->second.id)));
 						}
-						out.push_back(Ins("call_native",Tostring(Fiter->second.args.size())));
+						out.push_back(Ins("call_native",Tostring(iter->second.args.size())));
 					}
 				}
-				s.push_back(Token(Fiter->second.type,"",op.line,op.byte));
+				else{
+					out.push_back(Ins("push_var_global",Tostring(iter->second.id)));
+					out.push_back(Ins("goto",Tostring(size)));
+				}
+				is_global=false;
+				s.push_back(Token(iter->second.type,"",op.line,op.byte));
 			}
 			else{
 				x=0;
@@ -1173,6 +1178,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 			}
 			else if(token.Value=="function"){
 					del_var=vector<string>();
+					vector<string> on_t;
 					if(ssize>1){
 						error_list.push_back("错误："+Position(token.line,token.byte)+" 函数不允许定义在其他指令中");
 						return i;
@@ -1195,10 +1201,8 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 函数名不能为关键字");
 						break;
 					}
-                    if(functions.find(next.Value)!=functions.end()){
-						warn_list.push_back("警告："+Position(next.line,next.byte)+" 函数'"+next.Value+"'重复定义");
-                    }
                     token=next;
+                    next=type;
                     int m=token.sub.size();
                     if(m>0){
 						for(int f=0;f<m;f++){
@@ -1207,6 +1211,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 								error_list.push_back("错误："+Position(type.line,type.byte)+"类型'"+type.Value+"'无效");
 								break;
 							}
+							on_t.push_back(type.Value);
 							o=token.sub[f].sub[1];
 							if(o.Type!="var"){
 								error_list.push_back("错误："+Position(o.line,o.byte)+"变量名'"+o.Value+"'无效");
@@ -1224,9 +1229,18 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 							break;
 						}
                     }
-                    functions.insert(pair<string,function>(token.Value,function(out.size()+2,false,next_type,farg)));
                     ftype=next_type;
                     i++;
+                    iter=domains[0].find(token.Value);
+                    if(iter==domains[0].end()){
+						domains[0].insert(pair<string,var>(token.Value,var(domains[0].size()-31,next.Value,on_t)));
+						out.push_back(Ins("push_function",Tostring(out.size()+2)));
+						out.push_back(Ins("store_var_global",Tostring(domains[0].size()-32)));
+                    }
+                    else{
+						out.push_back(Ins("push_function",Tostring(out.size()+2)));
+						out.push_back(Ins("store_var_global",Tostring(iter->second.id)));
+                    }
                     out.push_back(Ins("jump"));
                     last_pos=out.size()-1;
                     last_i=i;
@@ -1238,10 +1252,6 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
                     if(!error_list.empty()){
 						break;
                     }
-                    if(i==last_i){
-						error_list.push_back("错误："+Position(token.line,token.byte)+" 函数必须实现");
-						break;
-                    }
                     out[last_pos].arg1=Tostring(out.size()-1);
 			}
 			else if(token.Value=="interface"){
@@ -1251,6 +1261,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					}
 					farg=vector<var>();
 					g=map<string,var>();
+					vector<string> on_t;
 					if(innerFX){
 						error_list.push_back("错误："+Position(token.line,token.byte)+" 接口函数不允许嵌套定义");
 						break;
@@ -1268,10 +1279,8 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 						error_list.push_back("错误："+Position(next.line,next.byte)+" 接口函数名不能为关键字");
 						break;
 					}
-                    if(functions.find(next.Value)!=functions.end()){
-						warn_list.push_back("警告："+Position(next.line,next.byte)+" 接口函数'"+next.Value+"'重复定义");
-                    }
                     token=next;
+                    next=type;
                     m=token.sub.size();
                     if(m>0){
 						for(int f=0;f<m;f++){
@@ -1295,39 +1304,18 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 							}
 							g.insert(pair<string,var>(o.Value,var(f/2,type.Value)));
 							farg.push_back(var(f/2,type.Value));
+							on_t.push_back(type.Value);
 						}
 						if(!error_list.empty()){
 							break;
 						}
                     }
-                    iter=domains[tab].find(token.Value);
-                    if(iter!=domains[tab].end()){
-						if(!tab){
-							functions.insert(pair<string,function>(token.Value,function(iter->second.id,true,next_type,farg)));
-						}
-						else{
-							functions.insert(pair<string,function>(token.Value,function(iter->second.id,true,next_type,farg,true)));
-						}
+                    iter=domains[0].find(token.Value);
+                    if(iter!=domains[0].end()){
+						domains[0][token.Value].args=on_t;
                     }
                     else{
-                    	iter=domain.find(token.Value);
-						if(iter!=domain.end()){
-							if(!tab){
-								functions.insert(pair<string,function>(token.Value,function(iter->second.id,true,next_type,farg)));
-							}
-							else{
-								functions.insert(pair<string,function>(token.Value,function(iter->second.id,true,next_type,farg)));
-							}
-						}
-						else{
-							if(is_std){
-								functions.insert(pair<string,function>(token.Value,function(0,true,next_type,farg,false,true)));
-							}
-							else{
-								error_list.push_back("错误："+Position(line,byte)+" 接口'"+token.Value+"'必须与变量绑定");
-								break;
-							}
-						}
+						domains[0].insert(pair<string,var>(token.Value,var(domains[0].size(),next.Value,on_t,true,is_std)));
                     }
 			}
 			else if(token.Value=="call"){
@@ -1599,8 +1587,15 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				}
 				if(token.Value=="local"){
 					iter=domains[tab].find(next.Value);
-					posi=var_num[tab]++;
-					domains[tab].insert(pair<string,var>(next.Value,var(posi,type.Value)));
+					var_num[tab]++;
+					if(!tab){
+						posi=domains[0].size()-31;
+						domains[tab].insert(pair<string,var>(next.Value,var(posi,type.Value)));
+					}
+					else{
+						posi=domains[tab].size();
+						domains[tab].insert(pair<string,var>(next.Value,var(posi,type.Value)));
+					}
 					result=iter==domains[tab].end();
 				}
 				else if(!innerFX){
@@ -1652,10 +1647,6 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 				if(type.Value!="Object"&&type.Value!=o_t&&o_t!="Object"){
 					error_list.push_back("错误："+Position(line,byte)+" 变量'"+next.Value+"'类型与表达式的类型不匹配 "+type.Value+"/"+o_t);
 					break;
-				}
-				if(o_t=="NativeFunction"&&next.Value!=last_face&&last_face!=""){
-					functions[next.Value]=functions[last_face];
-					last_face="";
 				}
 				out.push_back(Ins("store_var_"+type.Type,Tostring(posi)));
 			}
@@ -1918,6 +1909,7 @@ int main(int argc,char* argv[]){
 	InsMap["push_null"]="62";
 	InsMap["fseek"]="63";
 	InsMap["setstr"]="64";
+	InsMap["push_function"]="65";
 	if(argc>1){
 		string on=string(argv[1]);
 		if(on=="-h"){
