@@ -450,14 +450,13 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 		else if(onget[0]=='"'){
 			onstr="\"";
 			onget[0]=fgetc(fp);
-			while(onget[0]!='"'){
-				if(onget[0]=='\n'||onget[0]==EOF){
-					error_list.push_back("错误："+Position(line,byte)+" 字符串末尾缺少<\">");
-					break;
-				}
+			while(true){
 				if(last_get=='\\'&&onget[0]=='"'){
 					onstr[onstr.length()-1]='"';
 					onget[0]=0;
+				}
+				else if(onget[0]=='"'){
+					break;
 				}
 				else if(last_get=='\\'&&onget[0]=='n'){
 					onstr[onstr.length()-1]='\n';
@@ -466,6 +465,17 @@ void Parse_Token(FILE *fp,vector<Token> *token_list){
 				else if(last_get=='\\'&&onget[0]=='r'){
 					onstr[onstr.length()-1]='\r';
 					onget[0]=0;
+				}
+				else if(last_get=='\\'&&onget[0]=='t'){
+					onstr[onstr.length()-1]='\t';
+					onget[0]=0;
+				}
+				else if(last_get=='\\'&&onget[0]=='\\'){
+					onget[0]=0;
+				}
+				else if(onget[0]=='\n'||onget[0]==EOF){
+					error_list.push_back("错误："+Position(line,byte)+" 字符串末尾缺少<\">");
+					break;
 				}
 				else{
 					onstr+=onget[0];
@@ -840,39 +850,21 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 				else{
 					iter=domain.find(op.Value);
 					if(iter==domain.end()){
-						error_list.push_back("错误："+Position(op.line,op.byte)+" 变量'"+op.Value+"'未在作用域中定义");
-						return "";
+						iter=domains[0].find(op.Value);
+						if(iter==domains[0].end()){
+							error_list.push_back("错误："+Position(op.line,op.byte)+" 变量'"+op.Value+"'未在作用域中定义");
+							return "";
+						}
+						else{
+							is_global=true;
+						}
+					}
+					if(is_global){
+						out.push_back(Ins("push_var_global",Tostring(iter->second.id)));
+						is_global=false;
 					}
 					else{
-						if(is_set){
-							is_ref="true";
-						}
-						else{
-							is_ref="f";
-						}
-						if(iter->second.type=="Array"||iter->second.type=="File"){
-							is_ref="true";
-						}
-						if(i<exp.size()-1){
-							if(!(exp[i+1].Value=="."&&exp[i+1].Type=="op")){
-								op.Type=iter->second.type;
-								if(is_global){
-									out.push_back(Ins("push_var_global",Tostring(iter->second.id)));
-								}
-								else{
-									out.push_back(Ins("push_var_local",Tostring(iter->second.id)));
-								}
-							}
-						}
-						else{
-							if(is_global){
-								out.push_back(Ins("push_var_global",Tostring(iter->second.id)));
-							}
-							else{
-								out.push_back(Ins("push_var_local",Tostring(iter->second.id)));
-							}
-						}
-						is_ref="false";
+						out.push_back(Ins("push_var_local",Tostring(iter->second.id)));
 					}
 					s.push_back(Token(iter->second.type,op.Value,op.line,op.byte));
 				}
@@ -930,6 +922,9 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 					}
 					else if(op.Value=="File"){
 						out.push_back(Ins("open_file"));
+					}
+					else if(op.Value=="SetString"){
+						out.push_back(Ins("setstr"));
 					}
 					else if(op.Value=="Input"){
 						out.push_back(Ins("input"));
@@ -1486,9 +1481,11 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
                     if(!error_list.empty()){
 						break;
                     }
-				if(bk){
+					if(bk){
 					bk=0;
 					i--;
+					last_p.push_back(Po(tab,out.size()));
+					out.push_back(Ins("jump"));
 				}
 				out[if_stack.back()].arg1=Tostring(out.size()-1);
 				if_stack.pop_back();
@@ -1548,7 +1545,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
 					i--;
 				}
 				while(!last_p.empty()){
-					if(last_p.back().tab!=tab+1){
+					if(tab>=last_p.back().tab){
 						break;
 					}
 					out[last_p.back().po].arg1=Tostring(out.size()-1);
@@ -1918,6 +1915,7 @@ int main(int argc,char* argv[]){
 	InsMap["jump"]="61";
 	InsMap["push_null"]="62";
 	InsMap["fseek"]="63";
+	InsMap["setstr"]="64";
 	if(argc>1){
 		string on=string(argv[1]);
 		if(on=="-h"){

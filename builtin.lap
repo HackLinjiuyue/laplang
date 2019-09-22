@@ -32,3 +32,4 @@ function void Println(Object value)
 	return
 interface int Type(Object obj)
 interface string Input()
+interface void SetString(string str,int index,string v)

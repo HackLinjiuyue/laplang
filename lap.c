@@ -64,7 +64,7 @@ int GetIns(int*** on,FILE* fp,int ref){
     	if(feof(fp)){
     		break;
     	}
-        if(MaxPC>63){
+        if(MaxPC>64){
 			printf("Err:unrecognized ins %d\n",MaxPC);
 			return 0;
         }
@@ -820,7 +820,7 @@ void SetIndex(LapState *env){//引用设置
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	int index=*(int*)op2->Value;
-	if(index>op1->Size-1){
+	if(index>op1->Size-1||index<0){
 		env->Err=2;
 		return;
 	}
@@ -1108,23 +1108,37 @@ void Fseek(LapState *env){
 	FreeObject(op2);
 }
 
-void(*Ins[64])(LapState*)={PushConst,PushVarLocal,PushVarGlobal,
+void SetString(LapState *env){
+	LapObject *op3=env->Stack[--env->Index];
+	LapObject *op2=env->Stack[--env->Index];
+	LapObject *op1=env->Stack[--env->Index];
+	int index=*(int*)op2->Value;
+	if(index>op1->Size-1||index<0){
+		env->Err=2;
+		return;
+	}
+	((char*)op1->Value)[index]=*(char*)op3->Value;
+	FreeObject(op1);
+	FreeObject(op2);
+	FreeObject(op3);
+}
+
+void(*Ins[65])(LapState*)={PushConst,PushVarLocal,PushVarGlobal,
 Pop,Add,Sub,Mul,Div,Mod,MoveLeft,MoveRight,BitXor,BitAnd,BitOr,
 Or,And,Bigger,Smaller,PushFile,Equal,Index,Not,Inc,Dec,IsNull,
 Ops,Print,GetCommandArg,StoreVarLocal,StoreVarGlobal,SetVarLocal,
 SetVarGlobal,True_Jump,False_Jump,Goto,Return,Asc,Len,Fgetc,Fwrite,
 CloseFile,PushObj,SetProperty,SetIndex,ArrayPush,ArrayPop,
 ArrayFill,ArrayInsert,ArrayRemove,Dlopen,Dlsym,CallNative,Dlclose,
-PushEmptyStr,PushArray,Delete,Exec,Int,Float,Type,Input,Jump,PushNULL,Fseek
+PushEmptyStr,PushArray,Delete,Exec,Int,Float,Type,Input,Jump,PushNULL,Fseek,SetString
 };
 /*
-char dbg_str[63][20]={"PushConst","PushVarLocal","PushVarGlobal","Pop","Add","Sub","Mul","Div","Mod",
+char dbg_str[65][20]={"PushConst","PushVarLocal","PushVarGlobal","Pop","Add","Sub","Mul","Div","Mod",
 "MoveLeft","MoveRight","BitXor","BitAnd","BitOr","Or","And","Bigger","Smaller","PushFile","Equal","Index",
 "Not","Inc","Dec","IsNull","Ops","Print","GetCommandArg","StoreVarLocal","StoreVarGlobal","SetVarLocal",
 "SetVarGlobal","True_Jump","False_Jump","Goto","Return","Asc","Len","Fgetc","Fwrite","CloseFile","PushObj",
 "SetProperty","SetIndex","ArrayPush","ArrayPop","ArrayFill","ArrayInsert","ArrayRemove","Dlopen","Dlsym",
-"CallNative","Dlclose","PushEmptyStr","PushArray","Delete","Exec","Int","Float","Type","Input","Jump","PushNULL","Fseek"};*/
-
+"CallNative","Dlclose","PushEmptyStr","PushArray","Delete","Exec","Int","Float","Type","Input","Jump","PushNULL","Fseek","SetString"};*/
 
 int StartVM(LapState *env){
 	int max=env->TruePC;
