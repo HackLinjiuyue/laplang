@@ -737,7 +737,8 @@ string Parse_exp(vector<Token> &exp,bool is_set,map<string,var> &domain,bool is_
 			}
 			else if(op.Value=="@"){
 				op.sub=Trans_exp(op.sub);
-				if(Parse_exp(op.sub,is_set,domain,is_global)!="int"){
+				next_type=Parse_exp(op.sub,is_set,domain,is_global);
+				if(next_type!="int"&&next_type!="Object"){
 					error_list.push_back("错误："+Position(op.line,op.byte)+" 数组下标必须为整数");
 					return "";
 				}
@@ -1239,7 +1240,7 @@ int Grammar_check(vector<Token> &tokens,bool innerFX=false,map<string,var> give=
                     }
                     else{
 						out.push_back(Ins("push_function",Tostring(out.size()+2)));
-						out.push_back(Ins("store_var_global",Tostring(iter->second.id)));
+						out.push_back(Ins("set_var_global",Tostring(iter->second.id)));
                     }
                     out.push_back(Ins("jump"));
                     last_pos=out.size()-1;

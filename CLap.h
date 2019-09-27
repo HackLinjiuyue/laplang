@@ -24,9 +24,10 @@ typedef struct LapObject{
 	int MaxSize;
 	int Ref;
 	void* Ori;
+	void(*Free)(struct LapObject*);
 }LapObject;
 
-LapObject *CreateObject(int type,int size,void* value){
+LapObject *CreateObject(int type,int size,void* value,void(*ff)(LapObject*)){
 	LapObject *temp=malloc(sizeof(LapObject));
 	temp->Type=type;
 	temp->Size=size;
@@ -34,6 +35,7 @@ LapObject *CreateObject(int type,int size,void* value){
 	temp->MaxSize=size+4;
 	temp->Ref=0;
 	temp->Ori=NULL;
+	temp->Free=ff;
 	int i=0;
 	if(value==NULL){
 		switch(type){
@@ -60,7 +62,7 @@ LapObject *CreateObject(int type,int size,void* value){
 		}
 	}
 	else{
-		if(type==2){
+		if(type==2||type==8){
 			temp->Ref=1;
 		}
 	}
@@ -72,12 +74,12 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 	if(obj!=NULL){
 		int size=obj->Size,i=0;
 		int type=obj->Type;
-		if(type==4||type==2){
+		if(type==4||type==2||type==8){
 			temp=obj;
 			obj->Ref++;
 		}
 		else{
-			temp=CreateObject(obj->Type,size,NULL);
+			temp=CreateObject(obj->Type,size,NULL,obj->Free);
 			temp->Ori=obj->Value;
 			temp->Ref=1;
 			switch(type){
@@ -176,6 +178,13 @@ void FreeObject(LapObject *obj){
 				case 3:
 				free((int*)obj->Value);
 				break;
+				case 8:
+				free((int*)obj->Value);
+				break;
+				default:
+				if(obj->Free!=NULL){
+					obj->Free(obj);
+				}
 				}
 			}
 			else{

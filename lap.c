@@ -20,6 +20,8 @@ typedef struct{
 	int Index,ConstNum,*VarNum,*MaxVar,MaxIndex,PC,*PCStack,TruePC,Err,StackPC,MaxStackPC;
 }LapState;
 
+LapState* env=NULL;
+
 long long QuickPower(long long x,long long y)
 {
     long long ans=1,cnt=x;
@@ -45,14 +47,14 @@ int StrLen(const char* str){
     return i;
 }
 
-void ExtendStack(LapState *env){
+void ExtendStack(){
     if(env->MaxIndex==env->Index){
 		env->MaxIndex+=20;
 		env->Stack=(LapObject**)realloc(env->Stack,sizeof(LapObject*[env->MaxIndex]));
     }
 }
 
-int StartVM(LapState *env);
+int StartVM();
 
 int GetIns(int*** on,FILE* fp,int ref){
     int TruePC=0,*on_i;
@@ -114,23 +116,23 @@ LapState *InitVM(char* path,LapObject* arg){
 		case 0:
 			p=malloc(sizeof(int));
 			fread(p,sizeof(int),1,fp);
-			temp->ConstVars[i]=CreateObject(0,0,p);
+			temp->ConstVars[i]=CreateObject(0,0,p,NULL);
 			break;
 		case 1:
 			p=malloc(sizeof(double));
 			fread(p,sizeof(double),1,fp);
-			temp->ConstVars[i]=CreateObject(1,0,p);
+			temp->ConstVars[i]=CreateObject(1,0,p,NULL);
 			break;
 		case 2:
             fread(&i_temp,sizeof(int),1,fp);
             p=calloc(i_temp+1,sizeof(char));
             fread(p,sizeof(char),i_temp,fp);
-            temp->ConstVars[i]=CreateObject(2,i_temp,p);
+            temp->ConstVars[i]=CreateObject(2,i_temp,p,NULL);
 			break;
 		case 3:
 			p=malloc(sizeof(int));
 			fread(p,sizeof(int),1,fp);
-			temp->ConstVars[i]=CreateObject(3,0,p);
+			temp->ConstVars[i]=CreateObject(3,0,p,NULL);
 			break;
 		}
     }
@@ -147,7 +149,7 @@ void DeleteState(LapState *state,int is_main){
     free(state->ConstVars);
     max=state->VarNum[0];
     i=0;
-	for(;i<state->VarNum[0];++i){
+	for(;i<max;++i){
 		if(state->VarStacks[0][i]!=NULL){
 			FreeObject(state->VarStacks[0][i]);
 		}
@@ -218,46 +220,46 @@ double* ParseFloat(char* str){
     return temp;
 }
 
-void PushConst(LapState *env){
+void PushConst(){
     int* ins=env->Commands[env->PC];
     ExtendStack(env);
     env->Stack[env->Index]=CreateObjectFromObject(env->ConstVars[ins[1]]);
     ++env->Index;
 }
 
-void PushVarLocal(LapState *env){
+void PushVarLocal(){
     ExtendStack(env);
     env->Stack[env->Index++]=CreateObjectFromObject(env->VarStacks[env->StackPC-1][env->Commands[env->PC][1]]);
 }
 
-void PushVarGlobal(LapState *env){
+void PushVarGlobal(){
     ExtendStack(env);
     env->Stack[env->Index++]=CreateObjectFromObject(env->VarStacks[0][env->Commands[env->PC][1]]);
 }
 
-void Pop(LapState *env){
+void Pop(){
 	if(env->Index>0){
 		FreeObject(env->Stack[--env->Index]);
 		env->Stack[env->Index]=NULL;
 	}
 }
 
-void Add(LapState *env){
+void Add(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	LapObject *temp=NULL;
 	int type=op1->Type;
 	switch(type){
 	case 0:
-		temp=CreateObject(0,0,malloc(sizeof(int)));
+		temp=CreateObject(0,0,malloc(sizeof(int)),NULL);
 		*(int*)temp->Value=*(int*)op1->Value+*(int*)op2->Value;
 		break;
 	case 1:
-		temp=CreateObject(1,0,malloc(sizeof(double)));
+		temp=CreateObject(1,0,malloc(sizeof(double)),NULL);
 		*(double*)temp->Value=*(double*)op1->Value+*(double*)op2->Value;
 		break;
 	case 2:
-		temp=CreateObject(2,op1->Size+op2->Size,ConcatStr((char*)op1->Value,(char*)op2->Value,op1->Size,op2->Size));
+		temp=CreateObject(2,op1->Size+op2->Size,ConcatStr((char*)op1->Value,(char*)op2->Value,op1->Size,op2->Size),NULL);
 		break;
 	}
 	env->Stack[env->Index++]=temp;
@@ -265,18 +267,18 @@ void Add(LapState *env){
 	FreeObject(op2);
 }
 
-void Sub(LapState *env){
+void Sub(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	LapObject *temp=NULL;
 	int type=op1->Type;
 	switch(type){
 	case 0:
-		temp=CreateObject(0,0,malloc(sizeof(int)));
+		temp=CreateObject(0,0,malloc(sizeof(int)),NULL);
 		*(int*)temp->Value=*(int*)op1->Value-*(int*)op2->Value;
 		break;
 	case 1:
-		temp=CreateObject(1,0,malloc(sizeof(double)));
+		temp=CreateObject(1,0,malloc(sizeof(double)),NULL);
 		*(double*)temp->Value=*(double*)op1->Value-*(double*)op2->Value;
 		break;
 	}
@@ -285,18 +287,18 @@ void Sub(LapState *env){
 	FreeObject(op2);
 }
 
-void Mul(LapState *env){
+void Mul(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	LapObject *temp=NULL;
 	int type=op1->Type;
 	switch(type){
 	case 0:
-		temp=CreateObject(0,0,malloc(sizeof(int)));
+		temp=CreateObject(0,0,malloc(sizeof(int)),NULL);
 		*(int*)temp->Value=*(int*)op1->Value**(int*)op2->Value;
 		break;
 	case 1:
-		temp=CreateObject(1,0,malloc(sizeof(double)));
+		temp=CreateObject(1,0,malloc(sizeof(double)),NULL);
 		*(double*)temp->Value=*(double*)op1->Value**(double*)op2->Value;
 		break;
 	}
@@ -305,7 +307,7 @@ void Mul(LapState *env){
 	FreeObject(op2);
 }
 
-void Div(LapState *env){
+void Div(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	LapObject *temp=NULL;
@@ -324,11 +326,11 @@ void Div(LapState *env){
 	}
 	switch(type){
 	case 0:
-		temp=CreateObject(0,0,malloc(sizeof(int)));
+		temp=CreateObject(0,0,malloc(sizeof(int)),NULL);
 		*(int*)temp->Value=*(int*)op1->Value/ *(int*)op2->Value;
 		break;
 	case 1:
-		temp=CreateObject(1,0,malloc(sizeof(double)));
+		temp=CreateObject(1,0,malloc(sizeof(double)),NULL);
 		*(double*)temp->Value=*(double*)op1->Value/ *(double*)op2->Value;
 		break;
 	}
@@ -337,7 +339,7 @@ void Div(LapState *env){
 	FreeObject(op2);
 }
 
-void Mod(LapState *env){
+void Mod(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	LapObject *temp=NULL;
@@ -357,11 +359,11 @@ void Mod(LapState *env){
 	}
 	switch(type){
 	case 0:
-		temp=CreateObject(0,0,malloc(sizeof(int)));
+		temp=CreateObject(0,0,malloc(sizeof(int)),NULL);
 		*(int*)temp->Value=*(int*)op1->Value% *(int*)op2->Value;
 		break;
 	case 1:
-		temp=CreateObject(1,0,malloc(sizeof(double)));
+		temp=CreateObject(1,0,malloc(sizeof(double)),NULL);
 		d1=(*(double*)op1->Value);
 		d2=(*(double*)op2->Value);
 		*((double*)temp->Value)=d1-(int)(d1/d2)*d2;
@@ -372,80 +374,80 @@ void Mod(LapState *env){
 	FreeObject(op2);
 }
 
-void MoveLeft(LapState* env){
+void MoveLeft(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(0,0,NULL);
+	LapObject *temp=CreateObject(0,0,NULL,NULL);
 	(*(int*)temp->Value)=*(int*)op1->Value<<*(int*)op2->Value;
 	env->Stack[env->Index++]=temp;
 	FreeObject(op1);
 	FreeObject(op2);
 }
 
-void MoveRight(LapState* env){
+void MoveRight(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(0,0,NULL);
+	LapObject *temp=CreateObject(0,0,NULL,NULL);
 	(*(int*)temp->Value)=*(int*)op1->Value>>*(int*)op2->Value;
 	env->Stack[env->Index++]=temp;
 	FreeObject(op1);
 	FreeObject(op2);
 }
 
-void BitXor(LapState* env){
+void BitXor(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(0,0,NULL);
+	LapObject *temp=CreateObject(0,0,NULL,NULL);
 	(*(int*)temp->Value)=*(int*)op1->Value^*(int*)op2->Value;
 	env->Stack[env->Index++]=temp;
 	FreeObject(op1);
 	FreeObject(op2);
 }
 
-void BitAnd(LapState* env){
+void BitAnd(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(0,0,NULL);
+	LapObject *temp=CreateObject(0,0,NULL,NULL);
 	(*(int*)temp->Value)=*(int*)op1->Value&*(int*)op2->Value;
 	env->Stack[env->Index++]=temp;
 	FreeObject(op1);
 	FreeObject(op2);
 }
 
-void BitOr(LapState* env){
+void BitOr(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(0,0,NULL);
+	LapObject *temp=CreateObject(0,0,NULL,NULL);
 	(*(int*)temp->Value)=*(int*)op1->Value|*(int*)op2->Value;
 	env->Stack[env->Index++]=temp;
 	FreeObject(op1);
 	FreeObject(op2);
 }
 
-void Or(LapState* env){
+void Or(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(Lbool,0,NULL);
+	LapObject *temp=CreateObject(Lbool,0,NULL,NULL);
 	(*(int*)temp->Value)=*(int*)op1->Value||*(int*)op2->Value;
 	env->Stack[env->Index++]=temp;
 	FreeObject(op1);
 	FreeObject(op2);
 }
 
-void And(LapState* env){
+void And(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(Lbool,0,NULL);
+	LapObject *temp=CreateObject(Lbool,0,NULL,NULL);
 	(*(int*)temp->Value)=*(int*)op1->Value&&*(int*)op2->Value;
 	env->Stack[env->Index++]=temp;
 	FreeObject(op1);
 	FreeObject(op2);
 }
 
-void Bigger(LapState *env){
+void Bigger(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(Lbool,0,malloc(sizeof(int)));
+	LapObject *temp=CreateObject(Lbool,0,malloc(sizeof(int)),NULL);
 	int type=op1->Type;
 	switch(type){
 	case 0:
@@ -460,10 +462,10 @@ void Bigger(LapState *env){
 	FreeObject(op2);
 }
 
-void Smaller(LapState *env){
+void Smaller(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(Lbool,0,malloc(sizeof(int)));
+	LapObject *temp=CreateObject(Lbool,0,malloc(sizeof(int)),NULL);
 	int type=op1->Type;
 	switch(type){
 	case 0:
@@ -478,19 +480,19 @@ void Smaller(LapState *env){
 	FreeObject(op2);
 }
 
-void PushFile(LapState* env){
+void PushFile(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(Lfile,0,fopen(op1->Value,op2->Value));
+	LapObject *temp=CreateObject(Lfile,0,fopen(op1->Value,op2->Value),NULL);
 	env->Stack[env->Index++]=temp;
 	FreeObject(op1);
 	FreeObject(op2);
 }
 
-void Equal(LapState *env){
+void Equal(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(Lbool,0,malloc(sizeof(int)));
+	LapObject *temp=CreateObject(Lbool,0,malloc(sizeof(int)),NULL);
 	int type=op1->Type;
 	switch(type){
 	case 0:
@@ -511,7 +513,7 @@ void Equal(LapState *env){
 	FreeObject(op2);
 }
 
-void Index(LapState *env){
+void Index(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	LapObject *temp=NULL;
@@ -530,7 +532,7 @@ void Index(LapState *env){
 	case 2:
 		onstr=(char*)calloc(2,sizeof(char));
 		onstr[0]=((char*)op1->Value)[n];
-		temp=CreateObject(2,1,onstr);
+		temp=CreateObject(2,1,onstr,NULL);
 		break;
 	case 4:
 		temp=CreateObjectFromObject(op1->Property[n]);
@@ -541,7 +543,7 @@ void Index(LapState *env){
 	FreeObject(op2);
 }
 
-void Not(LapState *env){
+void Not(){
 	LapObject *op1=env->Stack[env->Index-1];
 	int type=op1->Type;
 	switch(type){
@@ -557,15 +559,15 @@ void Not(LapState *env){
 	}
 }
 
-void Inc(LapState *env){
+void Inc(){
 	++*(int*)env->Stack[env->Index-1]->Ori;
 }
 
-void Dec(LapState *env){
+void Dec(){
 	--*(int*)env->Stack[env->Index-1]->Ori;
 }
 
-void IsNull(LapState *env){
+void IsNull(){
 	LapObject *op1=env->Stack[env->Index-1];
 	int *p=malloc(sizeof(int));
 	if(op1==NULL){
@@ -575,10 +577,10 @@ void IsNull(LapState *env){
 		FreeObject(op1);
 		*p=0;
 	}
-	env->Stack[env->Index-1]=CreateObject(3,0,p);
+	env->Stack[env->Index-1]=CreateObject(3,0,p,NULL);
 }
 
-void Ops(LapState *env){
+void Ops(){
 	LapObject *op1=env->Stack[env->Index-1];
 	int type=op1->Type;
 	switch(type){
@@ -591,19 +593,19 @@ void Ops(LapState *env){
 	}
 }
 
-void Print(LapState *env){
+void Print(){
     PrintData(env->Stack[--env->Index]);
     FreeObject(env->Stack[env->Index]);
     env->Stack[env->Index]=NULL;
 }
 
-void GetCommandArg(LapState *env){
+void GetCommandArg(){
     ExtendStack(env);
     env->Stack[env->Index]=CreateObjectFromObject(env->Argv);
     ++env->Index;
 }
 
-void StoreVarLocal(LapState *env){
+void StoreVarLocal(){
     int* ins=env->Commands[env->PC];
     int i=ins[1],PC=env->StackPC-1;
 	if(i>env->MaxVar[PC]-1){
@@ -616,7 +618,7 @@ void StoreVarLocal(LapState *env){
 	env->Stack[env->Index]=NULL;
 }
 
-void StoreVarGlobal(LapState *env){
+void StoreVarGlobal(){
     int* ins=env->Commands[env->PC];
     int i=ins[1];
 	if(i>env->MaxVar[0]-1){
@@ -629,7 +631,7 @@ void StoreVarGlobal(LapState *env){
 	env->Stack[env->Index]=NULL;
 }
 
-void SetVarLocal(LapState *env){
+void SetVarLocal(){
     int* ins=env->Commands[env->PC];
     int i=ins[1],PC=env->StackPC-1;
 	if(env->VarStacks[PC][i]!=NULL){
@@ -640,7 +642,7 @@ void SetVarLocal(LapState *env){
 	env->Stack[env->Index]=NULL;
 }
 
-void SetVarGlobal(LapState *env){
+void SetVarGlobal(){
     int* ins=env->Commands[env->PC];
     int i=ins[1];
 	if(env->VarStacks[0][i]!=NULL){
@@ -651,7 +653,7 @@ void SetVarGlobal(LapState *env){
 	env->Stack[env->Index]=NULL;
 }
 
-void True_Jump(LapState *env){
+void True_Jump(){
 	int *line=NULL,value;
 	LapObject *op1=env->Stack[--env->Index];
 	if(op1->Type==1){
@@ -667,7 +669,7 @@ void True_Jump(LapState *env){
 	env->Stack[env->Index]=NULL;
 }
 
-void False_Jump(LapState *env){
+void False_Jump(){
 	int *line=NULL,value;
 	LapObject *op1=env->Stack[--env->Index];
 	if(op1->Type==1){
@@ -683,7 +685,7 @@ void False_Jump(LapState *env){
 	env->Stack[env->Index]=NULL;
 }
 
-void Goto(LapState *env){
+void Goto(){
 	LapObject *op1=env->Stack[--env->Index];
 	int n=env->Commands[env->PC][1],v=0;
 	if(n>MAX_ARG_NUM){
@@ -727,7 +729,7 @@ void Goto(LapState *env){
     //printf("%p\n",env->Stack[0]);
 }
 
-void Return(LapState *env){
+void Return(){
 	int PC=--env->StackPC;
 	env->PC=env->PCStack[PC];
 	int i=0,max=env->VarNum[PC];
@@ -742,30 +744,30 @@ void Return(LapState *env){
 	//printf("%p\n",env->Stack[0]);
 }
 
-void Asc(LapState *env){
+void Asc(){
 	LapObject *obj=env->Stack[env->Index-1];
 	int *x=malloc(sizeof(int));
 	*x=((char*)obj->Value)[0];
 	FreeObject(obj);
-	env->Stack[env->Index-1]=CreateObject(0,0,x);
+	env->Stack[env->Index-1]=CreateObject(0,0,x,NULL);
 }
 
-void Len(LapState *env){
+void Len(){
 	LapObject *obj=env->Stack[env->Index-1];
-	env->Stack[env->Index-1]=CreateObject(0,0,NULL);
+	env->Stack[env->Index-1]=CreateObject(0,0,NULL,NULL);
 	*(int*)env->Stack[env->Index-1]->Value=obj->Size;
 	FreeObject(obj);
 }
 
-void Fgetc(LapState *env){//所有文件操作确保至少绑定在一个变量上
+void Fgetc(){//所有文件操作确保至少绑定在一个变量上
 	LapObject *obj=env->Stack[env->Index-1];
 	char *x=malloc(sizeof(char[2]));
 	x[0]=fgetc((FILE*)obj->Value);
 	x[1]=0;
-	env->Stack[env->Index-1]=CreateObject(2,1,x);
+	env->Stack[env->Index-1]=CreateObject(2,1,x,NULL);
 }
 
-void Fwrite(LapState *env){
+void Fwrite(){
 	LapObject *op3=env->Stack[--env->Index];//v
 	LapObject *op1=env->Stack[--env->Index];//f
 	int type=op3->Type;
@@ -784,24 +786,23 @@ void Fwrite(LapState *env){
 	fwrite(value,sizeof(int),1,op1->Value);
 	break;
 	}
-	FreeObject(op1);
-	free(op3);
+	FreeObject(op3);
 	env->Stack[env->Index]=NULL;
 }
 
-void CloseFile(LapState *env){
+void CloseFile(){
 	LapObject *obj=env->Stack[--env->Index];
 	fclose((FILE*)obj->Value);
 	free(obj);
 	env->Stack[env->Index]=NULL;
 }
 
-void PushObj(LapState *env){
+void PushObj(){
     ExtendStack(env);
-    env->Stack[env->Index++]=CreateObject(4,env->Commands[env->PC][1],NULL);
+    env->Stack[env->Index++]=CreateObject(4,env->Commands[env->PC][1],NULL,NULL);
 }
 
-void SetProperty(LapState *env){//引用设置
+void SetProperty(){//引用设置
 	int* ins=env->Commands[env->PC];
 	LapObject *op2=env->Stack[--env->Index];
 	int i=ins[1];
@@ -814,7 +815,7 @@ void SetProperty(LapState *env){//引用设置
 	env->Stack[env->Index]=NULL;
 }
 
-void SetIndex(LapState *env){//引用设置
+void SetIndex(){//引用设置
 	LapObject *op3=env->Stack[--env->Index];
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
@@ -832,7 +833,7 @@ void SetIndex(LapState *env){//引用设置
 	env->Stack[env->Index]=NULL;
 }
 
-void ArrayPush(LapState *env){//配合引用使用
+void ArrayPush(){//配合引用使用
 	int p=env->Commands[env->PC][1];
 	LapObject *op1=env->Stack[env->Index-p-1],*op2=NULL;
 	if(op1->Size+p>=op1->MaxSize){
@@ -853,7 +854,7 @@ void ArrayPush(LapState *env){//配合引用使用
 	env->Stack[env->Index]=NULL;
 }
 
-void ArrayPop(LapState *env){//配合引用使用
+void ArrayPop(){//配合引用使用
 	LapObject *op1=env->Stack[--env->Index];
 	if(!op1->Size){
 		env->Err=6;
@@ -864,7 +865,7 @@ void ArrayPop(LapState *env){//配合引用使用
 	env->Stack[env->Index]=NULL;
 }
 
-void ArrayFill(LapState *env){//配合引用使用
+void ArrayFill(){//配合引用使用
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	int max=op1->Size,i=0;
@@ -878,7 +879,7 @@ void ArrayFill(LapState *env){//配合引用使用
 	env->Stack[env->Index]=NULL;
 }
 
-void ArrayInsert(LapState *env){//配合引用使用
+void ArrayInsert(){//配合引用使用
 	LapObject *op3=env->Stack[--env->Index];
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
@@ -905,7 +906,7 @@ void ArrayInsert(LapState *env){//配合引用使用
 	env->Stack[env->Index]=NULL;
 }
 
-void ArrayRemove(LapState *env){//配合引用使用
+void ArrayRemove(){//配合引用使用
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
     int index=*(int*)op2->Value,max=op1->Size-1;
@@ -922,7 +923,7 @@ void ArrayRemove(LapState *env){//配合引用使用
 	env->Stack[env->Index]=NULL;
 }
 
-void Dlopen(LapState *env){//动态库系列全部结合引用使用
+void Dlopen(){//动态库系列全部结合引用使用
 	LapObject *op1=env->Stack[--env->Index];
 	#ifdef __MINGW32__
 		void* temp=LoadLibrary((char*)op1->Value);
@@ -936,11 +937,11 @@ void Dlopen(LapState *env){//动态库系列全部结合引用使用
 		return;
 	}
 	FreeObject(env->Stack[env->Index]);
-	env->Stack[env->Index]=CreateObject(Lhandle,0,temp);
+	env->Stack[env->Index]=CreateObject(Lhandle,0,temp,NULL);
 	++env->Index;
 }
 
-void Dlsym(LapState *env){
+void Dlsym(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	char* str=(char*)op2->Value;
@@ -957,14 +958,14 @@ void Dlsym(LapState *env){
 	}
 	FreeObject(op2);
 	int type=env->Commands[env->PC][1];
-	env->Stack[env->Index]=CreateObject(type,0,temp);
+	env->Stack[env->Index]=CreateObject(type,0,temp,NULL);
 	++env->Index;
 }
 
-void CallNative(LapState *env){
+void CallNative(){
 	LapObject *op1=env->Stack[--env->Index];//函数本体先入栈
 	int max=env->Commands[env->PC][1];
-	LapObject *arg=CreateObject(Lobject,max,NULL);
+	LapObject *arg=CreateObject(Lobject,max,NULL,NULL);
 	int i=0;
 	for(;i<max;++i){
 		--env->Index;
@@ -979,7 +980,7 @@ void CallNative(LapState *env){
 	FreeObject(arg);
 }
 
-void Dlclose(LapState *env){
+void Dlclose(){
 	LapObject *op1=env->Stack[--env->Index];
 	#ifdef __MINGW32__
 		FreeLibrary(op1->Value);
@@ -990,29 +991,29 @@ void Dlclose(LapState *env){
 	env->Stack[env->Index]=NULL;
 }
 
-void PushEmptyStr(LapState *env){
+void PushEmptyStr(){
     ExtendStack(env);
-    env->Stack[env->Index]=CreateObject(2,0,NULL);
+    env->Stack[env->Index]=CreateObject(2,0,NULL,NULL);
     ++env->Index;
 }
 
-void PushArray(LapState *env){
+void PushArray(){
     ExtendStack(env);
 	LapObject *op1=env->Stack[env->Index-1];
 	if(*(int*)op1->Value<0){
 		env->Err=9;
 		return;
 	}
-	LapObject *op2=CreateObject(4,*(int*)op1->Value,NULL);
+	LapObject *op2=CreateObject(4,*(int*)op1->Value,NULL,NULL);
 	FreeObject(op1);
     env->Stack[env->Index-1]=op2;
 }
 
-void Delete(LapState *env){
+void Delete(){
 	env->VarStacks[env->StackPC-1][env->Commands[env->PC][1]]=NULL;
 }
 
-void Exec(LapState *env){
+void Exec(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	LapState *state=InitVM((char*)op1->Value,op2);
@@ -1029,7 +1030,7 @@ void Exec(LapState *env){
 	env->Stack[env->Index]=NULL;
 }
 
-void Int(LapState *env){
+void Int(){
 	LapObject *op1=env->Stack[env->Index-1];
 	op1->Type=0;
 	int *on=malloc(sizeof(int));
@@ -1038,7 +1039,7 @@ void Int(LapState *env){
 	op1->Value=on;
 }
 
-void Float(LapState *env){
+void Float(){
 	LapObject *op1=env->Stack[env->Index-1];
 	op1->Type=1;
 	double *on=malloc(sizeof(double));
@@ -1047,15 +1048,15 @@ void Float(LapState *env){
 	op1->Value=on;
 }
 
-void Type(LapState *env){
+void Type(){
 	LapObject *op1=env->Stack[env->Index-1];
-	env->Stack[env->Index-1]=CreateObject(0,0,NULL);
+	env->Stack[env->Index-1]=CreateObject(0,0,NULL,NULL);
 	*(int*)env->Stack[env->Index-1]->Value=op1->Type;
 	FreeObject(op1);
 }
 
 /*
-void Input(LapState *env){
+void Input(){
 	ExtendStack(env);
 	char onget=getch();
 	char *onstr=calloc(8,sizeof(char));
@@ -1078,7 +1079,7 @@ void Input(LapState *env){
 	env->Stack[env->Index++]=CreateObject(2,onsize,onstr);
 }*/
 
-void Input(LapState *env){
+void Input(){
 	ExtendStack(env);
 	char *onstr=calloc(300,sizeof(char));
 	fgets(onstr,300,stdin);
@@ -1087,19 +1088,19 @@ void Input(LapState *env){
 	onstr[size-1]=0;
 	strcpy(temp,onstr);
 	free(onstr);
-	env->Stack[env->Index++]=CreateObject(2,size-1,temp);
+	env->Stack[env->Index++]=CreateObject(2,size-1,temp,NULL);
 }
 
-void Jump(LapState *env){
+void Jump(){
 	env->PC=env->Commands[env->PC][1];
 }
 
-void PushNULL(LapState *env){
+void PushNULL(){
 	ExtendStack(env);
 	env->Stack[env->Index++]=NULL;
 }
 
-void Fseek(LapState *env){
+void Fseek(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
 	fseek(op1->Value,*(int*)op2->Value,SEEK_CUR);
@@ -1107,7 +1108,7 @@ void Fseek(LapState *env){
 	FreeObject(op2);
 }
 
-void SetString(LapState *env){
+void SetString(){
 	LapObject *op3=env->Stack[--env->Index];
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
@@ -1122,13 +1123,13 @@ void SetString(LapState *env){
 	FreeObject(op3);
 }
 
-void PushFunction(LapState *env){//需要一个起始位置
+void PushFunction(){//需要一个起始位置
 	int *value=malloc(sizeof(int));
 	*(int*)value=env->Commands[env->PC][1];
-	env->Stack[env->Index++]=CreateObject(8,0,value);
+	env->Stack[env->Index++]=CreateObject(8,0,value,NULL);
 }
 
-void(*Ins[66])(LapState*)={PushConst,PushVarLocal,PushVarGlobal,
+void(*Ins[66])()={PushConst,PushVarLocal,PushVarGlobal,
 Pop,Add,Sub,Mul,Div,Mod,MoveLeft,MoveRight,BitXor,BitAnd,BitOr,
 Or,And,Bigger,Smaller,PushFile,Equal,Index,Not,Inc,Dec,IsNull,
 Ops,Print,GetCommandArg,StoreVarLocal,StoreVarGlobal,SetVarLocal,
@@ -1138,19 +1139,19 @@ ArrayFill,ArrayInsert,ArrayRemove,Dlopen,Dlsym,CallNative,Dlclose,
 PushEmptyStr,PushArray,Delete,Exec,Int,Float,Type,Input,Jump,PushNULL,Fseek,SetString,
 PushFunction
 };
-/*
+
 char dbg_str[66][20]={"PushConst","PushVarLocal","PushVarGlobal","Pop","Add","Sub","Mul","Div","Mod",
 "MoveLeft","MoveRight","BitXor","BitAnd","BitOr","Or","And","Bigger","Smaller","PushFile","Equal","Index",
 "Not","Inc","Dec","IsNull","Ops","Print","GetCommandArg","StoreVarLocal","StoreVarGlobal","SetVarLocal",
 "SetVarGlobal","True_Jump","False_Jump","Goto","Return","Asc","Len","Fgetc","Fwrite","CloseFile","PushObj",
 "SetProperty","SetIndex","ArrayPush","ArrayPop","ArrayFill","ArrayInsert","ArrayRemove","Dlopen","Dlsym",
-"CallNative","Dlclose","PushEmptyStr","PushArray","Delete","Exec","Int","Float","Type","Input","Jump","PushNULL","Fseek","SetString","PushFunction"};*/
+"CallNative","Dlclose","PushEmptyStr","PushArray","Delete","Exec","Int","Float","Type","Input","Jump","PushNULL","Fseek","SetString","PushFunction"};
 
-int StartVM(LapState *env){
+int StartVM(){
 	int max=env->TruePC;
 	for(;env->PC<max;++env->PC){
-		//printf("%d %s %d %d\n",env->PC,dbg_str[env->Commands[env->PC][0]],env->Commands[env->PC][1],env->Commands[env->PC][2]);
-        (Ins[env->Commands[env->PC][0]])(env);
+		//printf("%s\n",dbg_str[env->Commands[env->PC][0]]);
+        (Ins[env->Commands[env->PC][0]])();
         if(env->Err){
 			break;
         }
@@ -1160,12 +1161,16 @@ int StartVM(LapState *env){
 
 
 int main(int argc,char* argv[]){
-	args=CreateObject(4,argc-1,NULL);
+	if(argc==1){
+		printf("Err:No file input\n");
+		return 1;
+	}
+	args=CreateObject(4,argc-1,NULL,NULL);
 	int i=1;
 	for(;i<argc;++i){
-		args->Property[i-1]=CreateObject(2,StrLen(argv[i]),argv[i]);
+		args->Property[i-1]=CreateObject(2,StrLen(argv[i]),argv[i],NULL);
 	}
-	LapState *env=InitVM(argv[1],args);
+	env=InitVM(argv[1],args);
 	if(env==NULL){
 		printf("Init Failed\n");
 		args->Ref=0;
@@ -1216,6 +1221,6 @@ int main(int argc,char* argv[]){
 	finish = clock();
 	duration = (double)(finish - start) / CLOCKS_PER_SEC;
 	printf("%f\n",duration);*/
-	DeleteState(env,1);
+	//DeleteState(env,1);
 	free(args);
 }

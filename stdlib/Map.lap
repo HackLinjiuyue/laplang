@@ -6,6 +6,8 @@ function Array Map()
 	return temp
 
 function int GetCode(string str)
+	if str==""
+		return 0
 	local int i 0
 	local int max StrLen(str)
 	local int temp 0
