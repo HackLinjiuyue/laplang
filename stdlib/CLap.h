@@ -13,8 +13,7 @@ enum LapType{
 	Lobject,
 	Lfile,
 	Lhandle,
-	Lnative,
-	Lfunc
+	Lnative
 };
 
 typedef struct LapObject{
@@ -25,17 +24,18 @@ typedef struct LapObject{
 	int MaxSize;
 	int Ref;
 	void* Ori;
+	void(*Free)(struct LapObject*);
 }LapObject;
 
-LapObject *CreateObject(int type,int size,void* value){
+LapObject *CreateObject(int type,int size,void* value,void(*ff)(LapObject*)){
 	LapObject *temp=malloc(sizeof(LapObject));
 	temp->Type=type;
 	temp->Size=size;
 	temp->Value=value;
-	temp->MaxSize=4;
+	temp->MaxSize=size+4;
 	temp->Ref=0;
 	temp->Ori=NULL;
-	char onstr[1];
+	temp->Free=ff;
 	int i=0;
 	if(value==NULL){
 		switch(type){
@@ -47,15 +47,23 @@ LapObject *CreateObject(int type,int size,void* value){
 		break;
 		case 2:
 		temp->Value=calloc(size+3,sizeof(char));
+		temp->Ref=1;
 		break;
 		case 3:
 		temp->Value=malloc(sizeof(int));
 		break;
 		case 4:
-		temp->Property=(LapObject**)calloc(size,sizeof(LapObject*));
+		temp->Property=(LapObject**)calloc(size+4,sizeof(LapObject*));
 		temp->Ref=1;
 		break;
+		default:
+		temp->Value=value;
 		//case 5:文件指针 6动态库句柄 7:原生函数
+		}
+	}
+	else{
+		if(type==2||type==8){
+			temp->Ref=1;
 		}
 	}
 	return temp;
@@ -66,12 +74,12 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 	if(obj!=NULL){
 		int size=obj->Size,i=0;
 		int type=obj->Type;
-		if(type==2||(type>3)){
+		if(type==4||type==2||type==8){
 			temp=obj;
 			obj->Ref++;
 		}
 		else{
-			temp=CreateObject(obj->Type,size,NULL);
+			temp=CreateObject(obj->Type,size,NULL,obj->Free);
 			temp->Ori=obj->Value;
 			temp->Ref=1;
 			switch(type){
@@ -84,6 +92,8 @@ LapObject *CreateObjectFromObject(LapObject *obj){
 			case 3:
 			*(int*)temp->Value=*(int*)obj->Value;
 			break;
+			default:
+			temp->Value=obj->Value;
 			}
 		}
 	}
@@ -145,16 +155,14 @@ void PrintData(LapObject *obj){
 		case Lnative:
 		printf("Lap NativeFunction");
 		break;
-		case Lfunc:
-		printf("Lap Function at %d",*(int*)obj->Value);
-		break;
 		}
 	}
 }
 
 void FreeObject(LapObject *obj){
 	if(obj!=NULL){
-		if(!obj->Ref){
+		//printf("ref %d\n",obj->Ref);
+		if(obj->Ref<1){
 			int type=obj->Type,size=obj->Size,i=0;
 			if(obj->Value!=NULL){
 				switch(type){
@@ -170,9 +178,13 @@ void FreeObject(LapObject *obj){
 				case 3:
 				free((int*)obj->Value);
 				break;
-				case Lfunc:
+				case 8:
 				free((int*)obj->Value);
 				break;
+				default:
+				if(obj->Free!=NULL){
+					obj->Free(obj);
+				}
 				}
 			}
 			else{
@@ -190,7 +202,7 @@ void FreeObject(LapObject *obj){
 		}
 		else{
 			--obj->Ref;
-			if(!obj->Ref){
+			if(obj->Ref<1){
 				FreeObject(obj);
 			}
 		}
