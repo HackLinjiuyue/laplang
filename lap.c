@@ -171,28 +171,6 @@ void DeleteState(LapState *state,int is_main){
     free(state);
 }
 
-int StringCmp(const char* str1,const char* str2){
-	int i=0;
-	int l1=StrLen(str1);
-	int l2=StrLen(str2);
-	if(l1!=l2){
-		return 0;
-	}
-	if(!l2&&!l1){
-		return 1;
-	}
-	while(1){
-		if(!str1[i]||!str2[i]){
-			return 1;
-		}
-		if(str1[i]!=str2[i]){
-			return 0;
-		}
-		++i;
-	}
-	return 1;
-}
-
 double* ParseFloat(char* str){
     int i=0,sign=1,l=0;
 	double *temp=(double*)malloc(sizeof(double));
@@ -502,7 +480,8 @@ void Equal(){
 		*(int*)temp->Value=*(double*)op1->Value==*(double*)op2->Value;
 		break;
 	case 2:
-		(*(int*)temp->Value)=StringCmp(op1->Value,op2->Value);
+//		printf("%s %s %d\n",op1->Value,op2->Value,!strcmp(op1->Value,op2->Value));
+		(*(int*)temp->Value)=!strcmp(op1->Value,op2->Value);
 		break;
 	case 3:
 		(*(int*)temp->Value)=*(int*)op1->Value==*(int*)op2->Value;
@@ -687,6 +666,7 @@ void False_Jump(){
 
 void Goto(){
 	LapObject *op1=env->Stack[--env->Index];
+	//printf("%p\n",op1);
 	int n=env->Commands[env->PC][1],v=0;
 	if(n>MAX_ARG_NUM){
 		env->Err=3;
@@ -1139,18 +1119,18 @@ ArrayFill,ArrayInsert,ArrayRemove,Dlopen,Dlsym,CallNative,Dlclose,
 PushEmptyStr,PushArray,Delete,Exec,Int,Float,Type,Input,Jump,PushNULL,Fseek,SetString,
 PushFunction
 };
-
+/*
 char dbg_str[66][20]={"PushConst","PushVarLocal","PushVarGlobal","Pop","Add","Sub","Mul","Div","Mod",
 "MoveLeft","MoveRight","BitXor","BitAnd","BitOr","Or","And","Bigger","Smaller","PushFile","Equal","Index",
 "Not","Inc","Dec","IsNull","Ops","Print","GetCommandArg","StoreVarLocal","StoreVarGlobal","SetVarLocal",
 "SetVarGlobal","True_Jump","False_Jump","Goto","Return","Asc","Len","Fgetc","Fwrite","CloseFile","PushObj",
 "SetProperty","SetIndex","ArrayPush","ArrayPop","ArrayFill","ArrayInsert","ArrayRemove","Dlopen","Dlsym",
 "CallNative","Dlclose","PushEmptyStr","PushArray","Delete","Exec","Int","Float","Type","Input","Jump","PushNULL","Fseek","SetString","PushFunction"};
-
+*/
 int StartVM(){
 	int max=env->TruePC;
 	for(;env->PC<max;++env->PC){
-		//printf("%s\n",dbg_str[env->Commands[env->PC][0]]);
+		//printf("%s %d %d\n",dbg_str[env->Commands[env->PC][0]],env->Commands[env->PC][1],env->Commands[env->PC][2]);
         (Ins[env->Commands[env->PC][0]])();
         if(env->Err){
 			break;
@@ -1173,8 +1153,6 @@ int main(int argc,char* argv[]){
 	env=InitVM(argv[1],args);
 	if(env==NULL){
 		printf("Init Failed\n");
-		args->Ref=0;
-		FreeObject(args);
 		return -1;
 	}
 /*
