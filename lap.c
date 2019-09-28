@@ -461,7 +461,11 @@ void Smaller(){
 void PushFile(){
 	LapObject *op2=env->Stack[--env->Index];
 	LapObject *op1=env->Stack[--env->Index];
-	LapObject *temp=CreateObject(Lfile,0,fopen(op1->Value,op2->Value),NULL);
+	void* fp=fopen(op1->Value,op2->Value);
+	LapObject *temp=NULL;
+	if(fp){
+		temp=CreateObject(Lfile,0,fopen(op1->Value,op2->Value),NULL);
+	}
 	env->Stack[env->Index++]=temp;
 	FreeObject(op1);
 	FreeObject(op2);
@@ -587,11 +591,10 @@ void GetCommandArg(){
 void StoreVarLocal(){
     int* ins=env->Commands[env->PC];
     int i=ins[1],PC=env->StackPC-1;
-	if(i>env->MaxVar[PC]-1){
+	if(++env->VarNum[PC]>env->MaxVar[PC]-1){
 		env->MaxVar[PC]+=20;
 		env->VarStacks[PC]=(LapObject**)realloc(env->VarStacks[PC],sizeof(LapObject*[env->MaxVar[PC]+1]));
 	}
-	++env->VarNum[PC];
 	env->VarStacks[PC][i]=CreateObjectFromObject(env->Stack[--env->Index]);
 	FreeObject(env->Stack[env->Index]);
 	env->Stack[env->Index]=NULL;
@@ -600,11 +603,10 @@ void StoreVarLocal(){
 void StoreVarGlobal(){
     int* ins=env->Commands[env->PC];
     int i=ins[1];
-	if(i>env->MaxVar[0]-1){
+	if(++env->VarNum[0]>env->MaxVar[0]-1){
 		env->MaxVar[0]+=20;
 		env->VarStacks[0]=(LapObject**)realloc(env->VarStacks[0],sizeof(LapObject*[env->MaxVar[0]+1]));
 	}
-	++env->VarNum[0];
 	env->VarStacks[0][i]=CreateObjectFromObject(env->Stack[--env->Index]);
 	FreeObject(env->Stack[env->Index]);
 	env->Stack[env->Index]=NULL;
@@ -937,9 +939,7 @@ void Dlsym(){
 		return;
 	}
 	FreeObject(op2);
-	int type=env->Commands[env->PC][1];
-	env->Stack[env->Index]=CreateObject(type,0,temp,NULL);
-	++env->Index;
+	env->Stack[env->Index++]=CreateObject(Lnative,0,temp,NULL);
 }
 
 void CallNative(){

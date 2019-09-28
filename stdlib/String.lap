@@ -27,3 +27,13 @@ function Array Split(string s,string c)
 	if onstr!=""
 		call PushValue(temp,onstr)
 	return temp
+
+function int IndexOf(string o,string s)
+	local int i 0
+	local int max StrLen(o)
+	local int size StrLen(s)
+	when i<max
+		if s==SubStr(o,i,size)
+			return i
+		Inc(i)
+	return EOF

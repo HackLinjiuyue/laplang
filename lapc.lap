@@ -163,6 +163,7 @@ Map_Add(Map_Builtin,"Argv",27)
 Map_Add(Map_Builtin,"Execute",56)
 Map_Add(Map_Builtin,"DLLOpen",49)
 Map_Add(Map_Builtin,"DLLClose",52)
+Map_Add(Map_Builtin,"DLLGetFunction",50)
 Map_Add(Map_Builtin,"SetArray",43)
 Map_Add(Map_Builtin,"Fseek",63)
 
@@ -241,6 +242,8 @@ function Array TransExp(Array TokenList)
 
 function Array ParseToken(string path)
 	local File in_file File(path,"r")
+	if IsNull(in_file)
+		return null
 	local Array TokenList Array(0)
 	local int line 1
 	local int byte 0
@@ -848,6 +851,9 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 					PushValue(Output,Ins(31,on_var[1],0))
 				continue
 			if on[1]=="local"
+				if innerloop
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：不能在循环体中定义变量")
+					return max
 				Inc(i)
 				set on TokenList[i]
 				set type on[1]
@@ -889,8 +895,47 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 						PushValue(Output,Ins(28,Len(Domains[1])-ms,0))
 						Map_Add(Domains,ons,Var(type,Len(Domains[1])-ms,Array(0),false,false,tab))
 					else
-						PushValue(Output,Ins(28,Len(Domains[1])-32,0))
-						Map_Add(Domains,ons,Var(type,Len(Domains[1])-32,Array(0),false,false,tab))
+						PushValue(Output,Ins(28,Len(Domains[1])-31,0))
+						Map_Add(Domains,ons,Var(type,Len(Domains[1])-31,Array(0),false,false,tab))
+					continue
+			if on[1]=="global"
+				if innerloop
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：不能在循环体中定义变量")
+					return max
+				Inc(i)
+				set on TokenList[i]
+				set type on[1]
+				if IsNull(Map_Get(Map_Type,type))
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：类型'"+type+"'无效")
+					return max
+				Inc(i)
+				set on TokenList[i]
+				set ons on[1]
+				set l on[2]
+				set b on[3]
+				if on[0]!="var"
+					PushValue(ErrorList,Position(l,b)+" 错误：变量名无效")
+					return max
+				if !IsNull(Map_Get(Domains,ons))
+					PushValue(ErrorList,Position(l,b)+" 错误：变量'"+ons+"'已在此作用域中定义")
+					return max
+				Inc(i)
+				set on GetExp(TokenList,i)
+				set i on[0]
+				set on on[1]
+				if Len(on)
+					set v_type ParseExp(TransExp(on))
+					if (v_type!="Object")&&(type!="Object")
+						if v_type!=type
+							PushValue(ErrorList,Position(l,b)+" 错误：赋值类型不匹配 "+type+"/"+v_type)
+							return max
+					PushValue(Output,Ins(29,Len(Domains[1])-31,0))
+					Map_Add(Domains,ons,Var(type,Len(Domains[1])-31,Array(0),false,false,0))
+					continue
+				else
+					PushValue(Output,Ins(62,0,0))
+					PushValue(Output,Ins(29,Len(Domains[1])-31,0))
+					Map_Add(Domains,ons,Var(type,Len(Domains[1])-31,Array(0),false,false,0))
 					continue
 			if on[1]=="interface"
 				if tab
@@ -905,9 +950,6 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 				Inc(i)
 				set on TokenList[i]
 				set ons on[1]
-				if !IsNull(Map_Get(Domains,ons))
-					PushValue(ErrorList,Position(on[2],on[3])+" 错误：接口'"+ons+"'已在此作用域中定义")
-					return max
 				set is_comma false
 				set l 0
 				set lin_arr Map()
@@ -940,7 +982,13 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 						PushValue(ErrorList,Position(on_a[2],on_a[3])+" 错误：参数'"+on_a[1]+"'已定义")
 						return max
 					Inc(l)
-				Map_Add(Domains,ons,Var(type,0,func_temp,true,true,0))
+				set lin_arr Map_Get(Domains,ons)
+				if IsNull(lin_arr)
+					Map_Add(Domains,ons,Var(type,0,func_temp,true,true,0))
+				else
+					SetArray(lin_arr,2,func_temp)
+					SetArray(lin_arr,3,true)
+					SetArray(lin_arr,4,true)
 				Inc(i)
 				continue
 			if on[1]=="function"
@@ -1035,6 +1083,9 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 
 function int Compile(string path)
 	local Array TokenList ParseToken(path)
+	if IsNull(TokenList)
+		Println("错误：文件"+path+"不存在！")
+		return 1
 	local int i 0
 	local int max Len(TokenList)
 	local Array ona Array(0)
@@ -1074,6 +1125,7 @@ else
 		PrintHelp()
 	else
 		Import("./builtin")
+		Print("")
 		if !Compile(Argv()[1])
 			if Len(Argv())==2
 				set out_name "a.lapb"
