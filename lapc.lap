@@ -1,0 +1,1116 @@
+#path "stdlib/"
+import "Map"
+import "Convert"
+
+function Array Token(string type,string value,int line,int byte,Array sub)
+	local Array temp Array(5)//t v l b s
+	SetArray(temp,0,type)
+	SetArray(temp,1,value)
+	SetArray(temp,2,line)
+	SetArray(temp,3,byte)
+	SetArray(temp,4,sub)
+	return temp
+
+function Array Var(string type,int id,Array args,bool is_func,bool is_interface,int is_global)
+	local Array temp Array(6)
+	SetArray(temp,0,type)
+	SetArray(temp,1,id)
+	SetArray(temp,2,args)
+	SetArray(temp,3,is_func)
+	SetArray(temp,4,is_interface)
+	SetArray(temp,5,is_global)
+	return temp
+
+function Array Const(string type,string value,int id)
+	local Array temp Array(3)
+	SetArray(temp,0,type)
+	SetArray(temp,1,value)
+	SetArray(temp,2,id)
+	return temp
+
+function Array Ins(int id,int arg1,int arg2)
+	local Array temp Array(3)
+	SetArray(temp,0,id)
+	SetArray(temp,1,arg1)
+	SetArray(temp,2,arg2)
+	return temp
+
+function Array Point(int t,int p)
+	local Array temp Array(2)
+	SetArray(temp,0,t)
+	SetArray(temp,1,p)
+	return temp
+
+function void PrintHelp()
+	Println("--------------------------------------------")
+	Println("lapc v1.0 based on lap by hacklinjiuyue or(魔凤啸天)")
+	Println("  -h 					  |for this help")
+	Println("  ./lap ./lapc.lapb input.lap output.lapb |to compile the file")
+	Println("--------------------------------------------")
+	return
+
+local Array Map_Num Map()//数字集
+Map_Add(Map_Num,"0",true)
+Map_Add(Map_Num,"1",true)
+Map_Add(Map_Num,"2",true)
+Map_Add(Map_Num,"3",true)
+Map_Add(Map_Num,"4",true)
+Map_Add(Map_Num,"5",true)
+Map_Add(Map_Num,"6",true)
+Map_Add(Map_Num,"7",true)
+Map_Add(Map_Num,"8",true)
+Map_Add(Map_Num,"9",true)
+Map_Add(Map_Num,".",true)
+
+local Array Map_OP Map()//符号集
+Map_Add(Map_OP,",",0)
+Map_Add(Map_OP,"/*",0)
+Map_Add(Map_OP,"*/",0)
+Map_Add(Map_OP,"//",0)
+Map_Add(Map_OP,"=",0)
+Map_Add(Map_OP,"+",1)
+Map_Add(Map_OP,"-",1)
+Map_Add(Map_OP,"*",2)
+Map_Add(Map_OP,"/",2)
+Map_Add(Map_OP,"<<",2)
+Map_Add(Map_OP,">>",2)
+Map_Add(Map_OP,"%",2)
+Map_Add(Map_OP,"^",3)
+Map_Add(Map_OP,"&",3)
+Map_Add(Map_OP,"|",3)
+Map_Add(Map_OP,"||",4)
+Map_Add(Map_OP,"&&",4)
+Map_Add(Map_OP,"==",5)
+Map_Add(Map_OP,">",5)
+Map_Add(Map_OP,"<",5)
+Map_Add(Map_OP,">=",5)
+Map_Add(Map_OP,"<=",5)
+Map_Add(Map_OP,"!=",5)
+Map_Add(Map_OP,"!",5)
+Map_Add(Map_OP,"(",6)
+Map_Add(Map_OP,")",1)
+Map_Add(Map_OP,"[",7)
+Map_Add(Map_OP,"]",7)
+
+local Array Map_Logic Map()
+Map_Add(Map_Logic,"||",4)
+Map_Add(Map_Logic,"&&",4)
+Map_Add(Map_Logic,"==",5)
+Map_Add(Map_Logic,">",5)
+Map_Add(Map_Logic,"<",5)
+Map_Add(Map_Logic,">=",5)
+Map_Add(Map_Logic,"<=",5)
+Map_Add(Map_Logic,"!=",5)
+
+local Array Map_KeyWord Map()
+local string out_name ""
+Map_Add(Map_KeyWord,"interface",true)
+Map_Add(Map_KeyWord,"function",true)
+Map_Add(Map_KeyWord,"return",true)
+Map_Add(Map_KeyWord,"if",true)
+Map_Add(Map_KeyWord,"break",true)
+Map_Add(Map_KeyWord,"continue",true)
+Map_Add(Map_KeyWord,"when",true)
+Map_Add(Map_KeyWord,"import",true)
+Map_Add(Map_KeyWord,"else",true)
+Map_Add(Map_KeyWord,"local",true)
+Map_Add(Map_KeyWord,"global",true)
+Map_Add(Map_KeyWord,"set",true)
+Map_Add(Map_KeyWord,"call",true)
+Map_Add(Map_KeyWord,"delete",true)
+Map_Add(Map_KeyWord,"#path",true)
+Map_Add(Map_KeyWord,"#reflect",true)
+Map_Add(Map_KeyWord,"while",true)
+
+local Array Map_Type Map()
+Map_Add(Map_Type,"int",true)
+Map_Add(Map_Type,"float",true)
+Map_Add(Map_Type,"bool",true)
+Map_Add(Map_Type,"string",true)
+Map_Add(Map_Type,"void",true)
+Map_Add(Map_Type,"Array",true)
+Map_Add(Map_Type,"File",true)
+Map_Add(Map_Type,"DLLHandle",true)
+Map_Add(Map_Type,"Object",true)
+Map_Add(Map_Type,"NativeFunction",true)
+
+local Array Map_Builtin Map()
+Map_Add(Map_Builtin,"Len",37)
+Map_Add(Map_Builtin,"StrLen",37)
+Map_Add(Map_Builtin,"File",18)
+Map_Add(Map_Builtin,"SetString",64)
+Map_Add(Map_Builtin,"Input",60)
+Map_Add(Map_Builtin,"Int",57)
+Map_Add(Map_Builtin,"Type",59)
+Map_Add(Map_Builtin,"Float",58)
+Map_Add(Map_Builtin,"IsNull",24)
+Map_Add(Map_Builtin,"Opposite",25)
+Map_Add(Map_Builtin,"负",25)
+Map_Add(Map_Builtin,"Fgetc",38)
+Map_Add(Map_Builtin,"Fclose",40)
+Map_Add(Map_Builtin,"Fwrite",39)
+Map_Add(Map_Builtin,"Asc",36)
+Map_Add(Map_Builtin,"Inc",22)
+Map_Add(Map_Builtin,"Dec",23)
+Map_Add(Map_Builtin,"Print",26)
+Map_Add(Map_Builtin,"Array",54)
+Map_Add(Map_Builtin,"FillArray",46)
+Map_Add(Map_Builtin,"PushValue",44)
+Map_Add(Map_Builtin,"PopValue",45)
+Map_Add(Map_Builtin,"InsertValue",47)
+Map_Add(Map_Builtin,"RemoveValue",48)
+Map_Add(Map_Builtin,"Argv",27)
+Map_Add(Map_Builtin,"Execute",56)
+Map_Add(Map_Builtin,"DLLOpen",49)
+Map_Add(Map_Builtin,"DLLClose",52)
+Map_Add(Map_Builtin,"SetArray",43)
+Map_Add(Map_Builtin,"Fseek",63)
+
+local Array Map_OP_Ins Map()
+Map_Add(Map_OP_Ins,"+",4)
+Map_Add(Map_OP_Ins,"-",5)
+Map_Add(Map_OP_Ins,"*",6)
+Map_Add(Map_OP_Ins,"/",7)
+Map_Add(Map_OP_Ins,"%",8)
+Map_Add(Map_OP_Ins,"<<",9)
+Map_Add(Map_OP_Ins,">>",10)
+Map_Add(Map_OP_Ins,"^",11)
+Map_Add(Map_OP_Ins,"&",12)
+Map_Add(Map_OP_Ins,"|",13)
+Map_Add(Map_OP_Ins,"||",14)
+Map_Add(Map_OP_Ins,"&&",15)
+Map_Add(Map_OP_Ins,">",16)
+Map_Add(Map_OP_Ins,"<",17)
+Map_Add(Map_OP_Ins,"==",19)
+
+local Array Domains Map()
+local Array Consts Map()
+local string func_type ""
+
+function string Position(int l,int b)
+	return ItoS(l)+":"+ItoS(b)
+
+local string onstr ""
+local string last_get ""
+local bool is_float false
+local Array ErrorList Array(0)
+local Array onget Array(0)
+local string s ""
+local string c_path ""
+local Array Output Array(0)
+
+function Array TransExp(Array TokenList)
+	local Array temp Array(0)
+	local Array stack Array(0)
+	local int i 0
+	local int max Len(TokenList)
+	local Array on Array(0)
+	when i<max
+		set on TokenList[i]
+		if (on[0]=="op")&&(on[1]!="@")
+			if ItoB((!Len(stack)))||((on[1]=="("))
+				PushValue(stack,on)
+				Inc(i)
+				continue
+			else
+				if on[1]==")"
+					when Len(stack)
+						set on stack[Len(stack)-1]
+						if on[1]=="("
+							break
+						PushValue(temp,on)
+						PopValue(stack)
+					PopValue(stack)
+				else
+					when Len(stack)
+						set on stack[Len(stack)-1]
+						if on[1]=="("
+							break
+						if Map_Get(Map_OP,on[1])<Map_Get(Map_OP,TokenList[i][1])
+							break
+						PushValue(temp,on)
+						PopValue(stack)
+					PushValue(stack,TokenList[i])
+		else
+			PushValue(temp,on)
+		Inc(i)
+	when Len(stack)
+		PushValue(temp,stack[Len(stack)-1])
+		PopValue(stack)
+	return temp
+
+function Array ParseToken(string path)
+	local File in_file File(path,"r")
+	local Array TokenList Array(0)
+	local int line 1
+	local int byte 0
+	when true
+		set s Fgetc(in_file)
+		if Asc(s)==EOF
+			break
+		if (s=="\n")||(s=="\r")||Asc(s)==13
+			Inc(line)
+			set byte 0
+			PushValue(TokenList,Token("break","\n",line,byte,Array(0)))
+			continue
+		Inc(byte)
+		if s==" "
+			continue
+		if s=="\t"
+			PushValue(TokenList,Token("tab","\t",line,byte,Array(0)))
+			continue
+		if !IsNull(Map_Get(Map_Num,s))
+			set onstr s
+			set is_float false
+			when true
+				set s Fgetc(in_file)
+				if (Asc(s)==EOF)||(IsNull(Map_Get(Map_Num,s)))
+					break
+				if s=="."
+					set is_float true
+				set onstr onstr+s
+				Inc(byte)
+			Fseek(in_file,负(1))
+			if is_float
+				PushValue(TokenList,Token("float",onstr,line,byte,Array(0)))
+			else
+				PushValue(TokenList,Token("int",onstr,line,byte,Array(0)))
+			continue
+		if s=="\""
+			set onstr ""
+			when true
+				set s Fgetc(in_file)
+				if (Asc(s)==EOF)||(s=="\n")||(s=="\r")||Asc(s)==13
+					PushValue(ErrorList,Position(line,byte)+" 错误：字符串缺少结束符'\"'")
+					return Array(0)
+				else
+					if s=="\""
+						if last_get=="\\"
+							SetString(onstr,StrLen(onstr)-1,s)
+						else
+							break
+					else
+						if last_get=="\\"
+							if (s=="n")||(s=="r")
+								SetString(onstr,StrLen(onstr)-1,"\n")
+							else
+								if s=="t"
+									SetString(onstr,StrLen(onstr)-1,"\t")
+								else
+									SetString(onstr,StrLen(onstr)-1,s)
+									set last_get ""
+									Inc(byte)
+									continue
+						else
+							set onstr onstr+s
+				set last_get s
+				Inc(byte)
+			PushValue(TokenList,Token("string",onstr,line,byte,Array(0)))
+			continue
+		if !IsNull(Map_Get(Map_OP,s))
+			if Len(TokenList)
+				set onget TokenList[Len(TokenList)-1]
+				if IsNull(Map_Get(Map_OP,onget[1]))
+					PushValue(TokenList,Token("op",s,line,byte,Array(0)))
+				else
+					set onstr onget[1]+s
+					if !IsNull(Map_Get(Map_OP,onstr))
+						SetArray(onget,1,onstr)
+					else
+						PushValue(TokenList,Token("op",s,line,byte,Array(0)))
+			else
+				PushValue(TokenList,Token("op",s,line,byte,Array(0)))
+			continue
+		set onstr s
+		when true
+			set s Fgetc(in_file)
+			Inc(byte)
+			if Asc(s)==EOF
+				break
+			if (!IsNull(Map_Get(Map_OP,s)))||(s==" ")||(s=="\n")||(s=="\r")||Asc(s)==13
+				break
+			set onstr onstr+s
+		Fseek(in_file,负(1))
+		if (onstr=="true")||(onstr=="false")
+			PushValue(TokenList,Token("bool",onstr,line,byte,Array(0)))
+		else
+			if onstr=="null"
+				PushValue(TokenList,Token("Object",onstr,line,byte,Array(0)))
+			else
+				if onstr=="EOF"
+					PushValue(TokenList,Token("int","-1",line,byte,Array(0)))
+				else
+					PushValue(TokenList,Token("var",onstr,line,byte,Array(0)))
+	Fclose(in_file)
+	return TokenList
+
+function int Compile(string path)
+
+function Array Fold(Array TokenList)
+	local Array temp Array(0)
+	local int i 0
+	local int max Len(TokenList)
+	local Array on Array(0)
+	local Array linshi Array(0)
+	local int kh 0
+	local string local_str ""
+	local int k 0
+	local int line 0
+	local int byte 0
+	when i<max
+		set on TokenList[i]
+		if (on[1]=="[")&&(on[0]=="op")
+			set linshi Array(0)
+			set kh 1
+			Inc(i)
+			set line on[2]
+			set byte on[3]
+			when i<max
+				set on TokenList[i]
+				if (on[1]=="[")&&(on[0]=="op")
+					Inc(kh)
+				else
+					if (on[1]=="]")&&(on[0]=="op")
+						Dec(kh)
+				if !kh
+					break
+				PushValue(linshi,on)
+				Inc(i)
+			if kh
+				PushValue(ErrorList,Position(line,byte)+" 错误：数组下标缺少结束符']'")
+				return Array(0)
+			PushValue(temp,Token("op","@",on[2],on[3],Fold(linshi)))
+			Inc(i)
+			continue
+		else
+			if on[0]=="op"
+				if on[1]=="("
+					if !i
+						PushValue(temp,on)
+						Inc(i)
+						continue
+					set kh 1
+					set linshi Array(0)
+					set on TokenList[i-1]
+					set line on[2]
+					set byte on[3]
+					Inc(i)
+					if on[0]=="var"&&IsNull(Map_Get(Map_KeyWord,on[1]))
+						set local_str on[1]
+						when i<max
+							set on TokenList[i]
+							if ((on[1]=="(")&&(on[0]=="op"))
+								Inc(kh)
+							else
+								if ((on[1]==")")&&(on[0]=="op"))
+									Dec(kh)
+							if !kh
+								break
+							PushValue(linshi,on)
+							Inc(i)
+						if kh
+							PushValue(ErrorList,Position(line,byte)+" 错误：函数"+local_str+"调用缺少结束符')'")
+							return Array(0)
+						if temp[Len(temp)-1][0]!="op"
+							PopValue(temp)
+						PushValue(temp,Token("call",local_str,on[2],on[3],Fold(linshi)))
+						Inc(i)
+						continue
+					else
+						set k i
+						set line on[2]
+						set byte on[3]
+						set kh 1
+						when k<max
+							set on TokenList[k]
+							if ((on[1]=="(")&&(on[0]=="op"))
+								Inc(kh)
+							else
+								if ((on[1]==")")&&(on[0]=="op"))
+									Dec(kh)
+							if !kh
+								break
+							Inc(k)
+						if kh
+							PushValue(ErrorList,Position(line,byte)+" 错误：表达式缺少结束符')'")
+							return Array(0)
+						PushValue(temp,TokenList[i-1])
+						continue
+				else
+					if on[1]=="/*"
+						Inc(i)
+						when i<max
+							set on TokenList[i]
+							if (on[1]=="*/")&&(on[0]=="op")
+								break
+							if on[0]=="break"
+								Inc(line)
+							Inc(i)
+						continue
+					else
+						if on[1]=="//"
+							Inc(i)
+							when i<max
+								set on TokenList[i]
+								if on[0]=="break"
+									Inc(line)
+									break
+								Inc(i)
+							continue
+		PushValue(temp,on)
+		Inc(i)
+	return temp
+
+function Array GetExp(Array TokenList,int start)
+	local int max Len(TokenList)
+	local Array temp Array(0)
+	local Array lins Array(0)
+	local Array backarr Array(0)
+	when start<max
+		set lins TokenList[start]
+		if lins[0]=="break"
+			break
+		PushValue(temp,lins)
+		Inc(start)
+	PushValue(backarr,start,temp)
+	return backarr
+
+function void Import(string pa)
+	Compile(c_path+pa+".lap")
+	return
+
+function string ParseExp(Array TokenList)
+	local Array stk Array(0)
+	local int point 0
+	local int mp Len(TokenList)
+	local Array op Array(0)
+	local Array var Array(0)
+	local Array op1 Array(0)
+	local Object op2 Array(0)
+	local int t_s 0
+	local int t_m 0
+	local int arg_count 0
+	local bool have_comma false
+	local Array on_exp Array(0)
+	local string back_type ""
+	local bool is_inter false
+	local Array on_const Array(0)
+	when point<mp
+		set op TokenList[point]
+		if op[0]=="op"
+			if !Len(stk)
+				PushValue(ErrorList,Position(op[2],op[3])+" 错误：运算符'"+op[1]+"'缺少操作数")
+				return ""
+			set op2 stk[Len(stk)-1]
+			PopValue(stk)
+			if op[1]=="!"
+				PushValue(stk,op2)
+				PushValue(Output,Ins(21,0,0))
+			else
+				if op[1]=="@"
+					ParseExp(TransExp(op[4]))
+					PushValue(Output,Ins(20,0,0))
+					if op2[0]=="string"
+						PushValue(stk,Token("string","",op2[2],op2[3],Array(0)))
+					else
+						PushValue(stk,Token("Object","",op2[2],op2[3],Array(0)))
+				else
+					if !Len(stk)
+						PushValue(ErrorList,Position(op[2],op[3])+" 错误：运算符'"+op[1]+"'缺少操作数")
+						return ""
+					set op1 stk[Len(stk)-1]
+					PopValue(stk)
+					if (op1[0]!="Object")&&(op2[0]!="Object")
+						if op1[0]!=op2[0]
+							PushValue(ErrorList,Position(op[2],op[3])+" 错误：子表达式两量必须类型相同 "+op1[0]+"/"+op2[0])
+							return ""
+					if !IsNull(Map_Get(Map_Logic,op[1]))
+						PushValue(stk,Token("bool","",op[2],op[3],Array(0)))
+					else
+						PushValue(stk,op1)
+					if op[1]==">="
+						PushValue(Output,Ins(17,0,0),Ins(21,0,0))
+					else
+						if op[1]=="<="
+							PushValue(Output,Ins(16,0,0),Ins(21,0,0))
+						else
+							if op[1]=="!="
+								PushValue(Output,Ins(19,0,0),Ins(21,0,0))
+							else
+								PushValue(Output,Ins(Map_Get(Map_OP_Ins,op[1]),0,0))
+			Inc(point)
+			continue
+		else
+			if op[0]=="var"
+				set var Map_Get(Domains,op[1])
+				if IsNull(var)
+					PushValue(ErrorList,Position(op[2],op[3])+" 错误：变量'"+op[1]+"'未在此作用域中定义")
+					return ""
+				SetArray(op,0,var[0])
+				set is_inter var[5]
+				if is_inter
+					PushValue(Output,Ins(1,var[1],0))
+				else
+					PushValue(Output,Ins(2,var[1],0))
+				set is_inter false
+				PushValue(stk,op)
+				Inc(point)
+				continue
+			else
+				if op[0]=="call"
+					set var Map_Get(Domains,op[1])
+					if IsNull(var)
+						PushValue(ErrorList,Position(op[2],op[3])+" 错误：函数'"+op[1]+"'未定义")
+						return ""
+					set is_inter var[3]
+					if !is_inter
+						PushValue(ErrorList,Position(op[2],op[3])+" 错误：'"+op[1]+"'不是一个函数")
+						return ""
+					set is_inter var[4]
+					set t_s 0
+					set op1 op[4]
+					set arg_count 0
+					set on_exp Array(0)
+					if Len(op1)
+						PushValue(op1,Token("op",",",0,0,Array(0)))
+					set t_m Len(op1)
+					when t_s<t_m
+						set op2 op1[t_s]
+						if (op2[0]=="op")&&(op2[1]==",")
+							if have_comma
+								PushValue(ErrorList,Position(op2[2],op2[3])+" 错误：函数调用参数格式不正确")
+								return ""
+							else
+								set have_comma true
+								set back_type ParseExp(TransExp(on_exp))
+								if back_type==""
+									return ""
+								if (arg_count>1)&&(op[1]=="PushValue")
+									Inc(arg_count)
+									Inc(t_s)
+									continue
+								if (back_type!="Object")&&(var[2][arg_count]!="Object")
+									if back_type!=var[2][arg_count]
+										PushValue(ErrorList,Position(op2[2],op2[3])+" 错误：函数参数"+ItoS(arg_count+1)+"所定义的类型'"+var[2][arg_count]+"'与所给表达式类型'"+back_type+"'不匹配")
+										return ""
+								set on_exp Array(0)
+								Inc(arg_count)
+								Inc(t_s)
+								continue
+						else
+							set have_comma false
+							PushValue(on_exp,op2)
+							Inc(t_s)
+							continue
+					if is_inter
+						set op2 Map_Get(Map_Builtin,op[1])
+						if IsNull(op2)
+							PushValue(Output,Ins(2,var[1],0))
+							PushValue(Output,Ins(51,arg_count,0))
+							SetArray(op,0,var[0])
+							PushValue(stk,op)
+							Inc(point)
+							continue
+						else
+							set op2 Ins(op2,0,0)
+							if op2[0]==44
+								SetArray(op2,1,arg_count-1)
+							PushValue(Output,op2)
+							SetArray(op,0,var[0])
+							PushValue(stk,op)
+							Inc(point)
+							continue
+					else
+						if arg_count!=Len(var[2])
+							PushValue(ErrorList,Position(op[2],op[3])+" 错误：函数所定义的参数个数是"+ItoS(Len(var[2]))+"个，但给了"+ItoS(arg_count)+"个")
+							return ""
+						PushValue(Output,Ins(2,var[1],0))
+						PushValue(Output,Ins(34,arg_count,0))
+						SetArray(op,0,var[0])
+						PushValue(stk,op)
+						Inc(point)
+						continue
+		if (op[1]=="null")&&(op[0]=="Object")
+			PushValue(Output,Ins(62,0,0))
+		else
+			set on_const Map_Get(Consts,op[0]+op[1])
+			if IsNull(on_const)
+				PushValue(Output,Ins(0,Len(Consts[1]),0))
+				Map_Add(Consts,op[0]+op[1],Const(op[0],op[1],Len(Consts[1])))
+			else
+				PushValue(Output,Ins(0,on_const[2],0))
+		PushValue(stk,op)
+		Inc(point)
+	if Len(stk)>1
+		PushValue(ErrorList,Position(op[2],op[3])+" 错误：表达式缺少运算符")
+		return ""
+	return stk[0][0]
+
+local Array break_list Array(0)
+local int bk_last 0
+
+function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,bool innerloop,int jumpto,int ms)
+	local int i start
+	local int max Len(TokenList)
+	local int tab 0
+	local Array on Array(0)
+	local string ons ""
+	local Array lin_arr Array(0)
+	local int l 0
+	local int b 0
+	local string type ""
+	local bool is_comma false
+	local Array on_a Array(0)
+	local string v_type ""
+	local int m 0
+	local Array name_list Array(0)
+	local bool is_return false
+	local bool is_if false
+	local int last_l 0
+	local Array func_temp Array(0)
+	local Array on_var Array(0)
+	when i<max
+		if TokenList[i][0]=="break"
+			Inc(i)
+			continue
+		set tab 0
+		when i<max
+			if TokenList[i][0]=="tab"
+				Inc(tab)
+			else
+				break
+			Inc(i)
+		if tab<=tab_num
+			set i i-tab
+			break
+		set on TokenList[i]
+		if on[0]=="var"
+			if on[1]=="break"
+				if !innerloop
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：break语句必须位于循环体内")
+					return max
+				Inc(i)
+				PushValue(break_list,Point(tab_num,Len(Output)))
+				PushValue(Output,Ins(61,0,0))
+				continue
+			if on[1]=="#path"
+				Inc(i)
+				set on TokenList[i]
+				if on[0]!="string"
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：路径必须为字符串")
+					return max
+				set c_path on[1]
+				Inc(i)
+				continue
+			if on[1]=="import"
+				Inc(i)
+				set on TokenList[i]
+				if on[0]!="string"
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：路径必须为字符串")
+					return max
+				Import(on[1])
+				if Len(ErrorList)
+					return max
+				Inc(i)
+				continue
+			if on[1]=="continue"
+				if !innerloop
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：continue语句必须位于循环体内")
+					return max
+				Inc(i)
+				PushValue(Output,Ins(61,jumpto,0))
+				continue
+			if (on[1]=="when")||(on[1]=="while")
+				Inc(i)
+				set l on[2]
+				set b on[3]
+				set on GetExp(TokenList,i)
+				set m Len(Output)
+				set i on[0]
+				set on on[1]
+				if !Len(on)
+					PushValue(ErrorList,Position(l,b)+" 错误：表达式不能为空")
+					return max
+				set type ParseExp(TransExp(on))
+				set last_l Len(Output)
+				PushValue(Output,Ins(33,0,0))
+				set m Len(Output)-m
+				if type!="Object"
+					if (type!="float")&&(type!="int")&&(type!="bool")
+						PushValue(ErrorList,Position(l,b)+" 错误：表达式类型不能为'"+type+"'")
+						return max
+				set i GrammarCheck(i,TokenList,innerFX,tab,true,last_l-m,ms)
+				PushValue(Output,Ins(61,last_l-m,0))
+				SetArray(Output[last_l],1,Len(Output)-1)
+				when Len(break_list)
+					if tab>=break_list[Len(break_list)-1][0]
+						break
+					SetArray(Output[break_list[Len(break_list)-1][1]],1,Len(Output)-1)
+					PopValue(break_list)
+				continue
+			if on[1]=="if"
+				Inc(i)
+				set l on[2]
+				set b on[3]
+				set on GetExp(TokenList,i)
+				set i on[0]
+				set on on[1]
+				if !Len(on)
+					PushValue(ErrorList,Position(l,b)+" 错误：表达式不能为空")
+					return max
+				set type ParseExp(TransExp(on))
+				set last_l Len(Output)
+				PushValue(Output,Ins(33,0,0))
+				if type!="Object"
+					if (type!="float")&&(type!="int")&&(type!="bool")
+						PushValue(ErrorList,Position(l,b)+" 错误：表达式类型不能为'"+type+"'")
+						return max
+				set is_if true
+				set i GrammarCheck(i,TokenList,innerFX,tab,innerloop,jumpto,ms)
+				SetArray(Output[last_l],1,Len(Output)-1)
+				continue
+			if on[1]=="else"
+				if is_if
+					set is_if false
+					SetArray(Output[last_l],1,Output[last_l][1]+1)
+					set last_l Len(Output)
+					PushValue(Output,Ins(61,0,0))
+				else
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：else找不到对应的if语句")
+					return max
+				Inc(i)
+				set i GrammarCheck(i,TokenList,innerFX,tab,innerloop,jumpto,ms)
+				SetArray(Output[last_l],1,Len(Output)-1)
+				continue
+			if on[1]=="return"
+				Inc(i)
+				set l on[2]
+				set b on[3]
+				set on GetExp(TokenList,i)
+				if func_type=="void"
+					if Len(on[1])
+						PushValue(ErrorList,Position(l,b)+" 错误：void类型的函数不允许拥有返回值")
+						return max
+				else
+					if !Len(on[1])
+						PushValue(ErrorList,Position(l,b)+" 错误：函数必须拥有返回值")
+						return max
+					else
+						set type ParseExp(TransExp(on[1]))
+						if (func_type!="Object")&&(type!="Object")
+							if func_type!=type
+								PushValue(ErrorList,Position(l,b)+" 错误：函数返回值类型'"+type+"'与定义的类型'"+func_type+"'不匹配")
+								return max
+				set i on[0]
+				set is_return true
+				PushValue(Output,Ins(35,0,0))
+				continue
+			if on[1]=="call"
+				Inc(i)
+				set on_a Array(0)
+				PushValue(on_a,TokenList[i])
+				set type ParseExp(on_a)
+				if type!="void"
+					PushValue(Output,Ins(3,0,0))
+				Inc(i)
+				continue
+			if on[1]=="set"
+				Inc(i)
+				set on TokenList[i]
+				set ons on[1]
+				set l on[2]
+				set b on[3]
+				set on Map_Get(Domains,ons)
+				if IsNull(on)
+					PushValue(ErrorList,Position(l,b)+" 错误：变量'"+ons+"'未在此作用域中定义")
+					return max
+				set on_var on
+				set ons on[0]
+				Inc(i)
+				set on TokenList[i]
+				set l on[2]
+				set b on[3]
+				set on GetExp(TokenList,i)
+				set i on[0]
+				set on on[1]
+				if !Len(on)
+					PushValue(ErrorList,Position(l,b)+" 错误：表达式不能为空")
+					return max
+				set type ParseExp(TransExp(on))
+				if (type!="Object")&&(ons!="Object")
+					if type!=ons
+						PushValue(ErrorList,Position(l,b)+" 错误：赋值类型不匹配 "+ons+"/"+type)
+						return max
+				set l on_var[5]
+				if l
+					PushValue(Output,Ins(30,on_var[1],0))
+				else
+					PushValue(Output,Ins(31,on_var[1],0))
+				continue
+			if on[1]=="local"
+				Inc(i)
+				set on TokenList[i]
+				set type on[1]
+				if IsNull(Map_Get(Map_Type,type))
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：类型'"+type+"'无效")
+					return max
+				Inc(i)
+				set on TokenList[i]
+				set ons on[1]
+				set l on[2]
+				set b on[3]
+				if on[0]!="var"
+					PushValue(ErrorList,Position(l,b)+" 错误：变量名无效")
+					return max
+				if !IsNull(Map_Get(Domains,ons))
+					PushValue(ErrorList,Position(l,b)+" 错误：变量'"+ons+"'已在此作用域中定义")
+					return max
+				Inc(i)
+				set on GetExp(TokenList,i)
+				set i on[0]
+				set on on[1]
+				if Len(on)
+					set v_type ParseExp(TransExp(on))
+					if (v_type!="Object")&&(type!="Object")
+						if v_type!=type
+							PushValue(ErrorList,Position(l,b)+" 错误：赋值类型不匹配 "+type+"/"+v_type)
+							return max
+					if tab
+						PushValue(Output,Ins(28,Len(Domains[1])-ms,0))
+						Map_Add(Domains,ons,Var(type,Len(Domains[1])-ms,Array(0),false,false,tab))
+					else
+						PushValue(Output,Ins(28,Len(Domains[1])-31,0))
+						Map_Add(Domains,ons,Var(type,Len(Domains[1])-31,Array(0),false,false,tab))
+					PushValue(name_list,ons)
+					continue
+				else
+					PushValue(Output,Ins(62,0,0))
+					if tab
+						PushValue(Output,Ins(28,Len(Domains[1])-ms,0))
+						Map_Add(Domains,ons,Var(type,Len(Domains[1])-ms,Array(0),false,false,tab))
+					else
+						PushValue(Output,Ins(28,Len(Domains[1])-32,0))
+						Map_Add(Domains,ons,Var(type,Len(Domains[1])-32,Array(0),false,false,tab))
+					continue
+			if on[1]=="interface"
+				if tab
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：接口不允许在此定义")
+					return max
+				Inc(i)
+				set on TokenList[i]
+				set type on[1]
+				if IsNull(Map_Get(Map_Type,type))
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：类型'"+type+"'无效")
+					return max
+				Inc(i)
+				set on TokenList[i]
+				set ons on[1]
+				if !IsNull(Map_Get(Domains,ons))
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：接口'"+ons+"'已在此作用域中定义")
+					return max
+				set is_comma false
+				set l 0
+				set lin_arr Map()
+				if Len(on[4])
+					PushValue(on[4],Token("op",",",on[2],on[3],Array(0)))
+				set b Len(on[4])
+				set func_temp Array(0)
+				when l<b
+					set on_a on[4][l]
+					set v_type on_a[1]
+					if v_type==","
+						if is_comma
+							PushValue(ErrorList,Position(on_a[2],on_a[3])+" 错误：','语法错误")
+							return max
+						else
+							set is_comma true
+						Inc(l)
+						continue
+					else
+						set is_comma false
+					if IsNull(Map_Get(Map_Type,v_type))
+						PushValue(ErrorList,Position(on_a[2],on_a[3])+" 错误：类型'"+v_type+"'无效")
+						return max
+					PushValue(func_temp,v_type)
+					Inc(l)
+					set on_a on[4][l]
+					if IsNull(Map_Get(lin_arr,on_a[1]))
+						Map_Add(lin_arr,on_a[1],Var(v_type,Len(lin_arr[1]),Array(0),false,false,0))
+					else
+						PushValue(ErrorList,Position(on_a[2],on_a[3])+" 错误：参数'"+on_a[1]+"'已定义")
+						return max
+					Inc(l)
+				Map_Add(Domains,ons,Var(type,0,func_temp,true,true,0))
+				Inc(i)
+				continue
+			if on[1]=="function"
+				if tab
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：函数不允许在此定义")
+					return max
+				Inc(i)
+				set on TokenList[i]
+				set type on[1]
+				if IsNull(Map_Get(Map_Type,type))
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：类型'"+type+"'无效")
+					return max
+				Inc(i)
+				set func_type type
+				set on TokenList[i]
+				set ons on[1]
+				set is_comma false
+				set l 0
+				set lin_arr Map()
+				if Len(on[4])
+					PushValue(on[4],Token("op",",",on[2],on[3],Array(0)))
+				set b Len(on[4])
+				set last_l Len(name_list)
+				set func_temp Array(0)
+				when l<b
+					set on_a on[4][l]
+					set v_type on_a[1]
+					if v_type==","
+						if is_comma
+							PushValue(ErrorList,Position(on_a[2],on_a[3])+" 错误：','语法错误")
+							return max
+						else
+							set is_comma true
+						Inc(l)
+						continue
+					else
+						set is_comma false
+					if IsNull(Map_Get(Map_Type,v_type))
+						PushValue(ErrorList,Position(on_a[2],on_a[3])+" 错误：类型'"+v_type+"'无效")
+						return max
+					PushValue(func_temp,v_type)
+					Inc(l)
+					if l==b
+						PushValue(ErrorList,Position(on_a[2],on_a[3])+" 错误：参数定义缺少名称")
+						return max
+					set on_a on[4][l]
+					if (IsNull(Map_Get(lin_arr,on_a[1])))&&(on_a[1]!=ons)
+						Map_Add(lin_arr,on_a[1],Var(v_type,Len(lin_arr[1]),Array(0),false,false,1))
+						Map_Add(Domains,on_a[1],Var(v_type,Len(lin_arr[1])-1,Array(0),false,false,1))
+						PushValue(name_list,on_a[1])
+					else
+						PushValue(ErrorList,Position(on_a[2],on_a[3])+" 错误：参数'"+on_a[1]+"'已定义")
+						return max
+					Inc(l)
+				set on_a Map_Get(Domains,ons)
+				if IsNull(on_a)
+					Map_Add(Domains,ons,Var(type,Len(Domains[1])-31-Len(lin_arr[1]),func_temp,true,false,0))
+					PushValue(Output,Ins(65,Len(Output)+2,0),Ins(29,Len(Domains[1])-32-Len(lin_arr[1]),0))
+				else
+					SetArray(on_a,2,func_temp)
+					PushValue(Output,Ins(65,Len(Output)+2,0),Ins(31,on_a[1],0))
+				set l Len(Output)
+				PushValue(Output,Ins(61,0,0))
+				Inc(i)
+				set i GrammarCheck(i,TokenList,true,0,false,0,Len(Domains[1])-Len(lin_arr[1]))
+				SetArray(Output[l],1,Len(Output)-1)
+				set b Len(name_list)
+				when last_l<b
+					Map_Remove(Domains,name_list[Dec(b)-1])
+					PopValue(name_list)
+				continue
+			else
+
+		else
+			if on[0]=="call"
+				set on_a Array(0)
+				PushValue(on_a,on)
+				set type ParseExp(on_a)
+				if type!="void"
+					PushValue(Output,Ins(3,0,0))
+				Inc(i)
+				Inc(i)
+				continue
+			else
+				PushValue(ErrorList,Position(on[2],on[3])+" 错误：表达式不允许在此出现")
+				return max
+	when Len(name_list)
+		Map_Remove(Domains,name_list[Len(name_list)-1])
+		PopValue(name_list)
+	set last_l 0
+	return i
+
+function int Compile(string path)
+	local Array TokenList ParseToken(path)
+	local int i 0
+	local int max Len(TokenList)
+	local Array ona Array(0)
+	if Len(ErrorList)
+		set max Len(ErrorList)
+		when i<max
+			Println(ErrorList[i])
+			Inc(i)
+		return 1
+	else
+		if max<2
+			Println("错误：文件"+path+"过短")
+			return 2
+		PushValue(TokenList,Token("break","\n",0,0,Array(0)))
+		set TokenList Fold(TokenList)
+		if Len(ErrorList)
+			set max Len(ErrorList)
+			when i<max
+				Println(ErrorList[i])
+				Inc(i)
+			return 1
+		set ona TokenList[Len(TokenList)-1]
+		PushValue(TokenList,Token("break","\n",ona[2],ona[3],Array(0)))
+		GrammarCheck(0,TokenList,false,负(1),false,0,0)
+		if Len(ErrorList)
+			Print("在"+path+"中：\n  ")
+			when Len(ErrorList)
+				Println(ErrorList[Len(ErrorList)-1])
+				PopValue(ErrorList)
+			return 1
+	return 0
+
+if Len(Argv())==1
+	PrintHelp()
+else
+	if Argv()[1]=="-h"
+		PrintHelp()
+	else
+		Import("./builtin")
+		if !Compile(Argv()[1])
+			if Len(Argv())==2
+				set out_name "a.lapb"
+			else
+				set out_name Argv()[2]
+			local File out_file File(out_name,"wb+")
+			local int c 0
+			local int cm Len(Consts[1])
+			local Object obj Array(0)
+			Fwrite(out_file,cm)
+			when c<cm
+				set obj Map_Get(Consts,Consts[1][c])
+				if obj[0]=="int"
+					Fwrite(out_file,0)
+					Fwrite(out_file,StoI(obj[1]))
+				else
+					if obj[0]=="float"
+						Fwrite(out_file,1)
+						Fwrite(out_file,StoF(obj[1]))
+					else
+						if obj[0]=="bool"
+							Fwrite(out_file,3)
+							if obj[1]=="true"
+								Fwrite(out_file,1)
+							else
+								Fwrite(out_file,0)
+						else
+							Fwrite(out_file,2)
+							Fwrite(out_file,Len(obj[1]))
+							Fwrite(out_file,obj[1])
+				Inc(c)
+			set c 0
+			set cm Len(Output)
+			Fwrite(out_file,cm)
+			when c<cm
+				Fwrite(out_file,Output[c][0])
+				Fwrite(out_file,Output[c][1])
+				Fwrite(out_file,Output[c][2])
+				Inc(c)
+			Fclose(out_file)
