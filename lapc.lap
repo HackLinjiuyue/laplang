@@ -43,7 +43,7 @@ function Array Point(int t,int p)
 
 function void PrintHelp()
 	Println("--------------------------------------------")
-	Println("lapc v1.0 based on lap by hacklinjiuyue or(魔凤啸天)")
+	Println("lapc v1.1 based on lap by hacklinjiuyue or(魔凤啸天)")
 	Println("  -h 					  |for this help")
 	Println("  ./lap ./lapc.lapb input.lap output.lapb |to compile the file")
 	Println("--------------------------------------------")
@@ -133,6 +133,7 @@ Map_Add(Map_Type,"File",true)
 Map_Add(Map_Type,"DLLHandle",true)
 Map_Add(Map_Type,"Object",true)
 Map_Add(Map_Type,"NativeFunction",true)
+Map_Add(Map_Type,"auto",true)
 
 local Array Map_Builtin Map()
 Map_Add(Map_Builtin,"Len",37)
@@ -247,14 +248,19 @@ function Array ParseToken(string path)
 	local Array TokenList Array(0)
 	local int line 1
 	local int byte 0
+	local bool is_break false
 	when true
 		set s Fgetc(in_file)
 		if Asc(s)==EOF
 			break
 		if (s=="\n")||(s=="\r")||Asc(s)==13
-			Inc(line)
-			set byte 0
-			PushValue(TokenList,Token("break","\n",line,byte,Array(0)))
+			if is_break
+				set is_break false
+			else
+				set is_break true
+				Inc(line)
+				set byte 0
+				PushValue(TokenList,Token("break","\n",line,byte,Array(0)))
 			continue
 		Inc(byte)
 		if s==" "
@@ -273,6 +279,8 @@ function Array ParseToken(string path)
 					set is_float true
 				set onstr onstr+s
 				Inc(byte)
+			if Asc(s)==EOF
+				break
 			Fseek(in_file,负(1))
 			if is_float
 				PushValue(TokenList,Token("float",onstr,line,byte,Array(0)))
@@ -327,12 +335,14 @@ function Array ParseToken(string path)
 		set onstr s
 		when true
 			set s Fgetc(in_file)
-			Inc(byte)
 			if Asc(s)==EOF
 				break
 			if (!IsNull(Map_Get(Map_OP,s)))||(s==" ")||(s=="\n")||(s=="\r")||Asc(s)==13
 				break
 			set onstr onstr+s
+			Inc(byte)
+		if Asc(s)==EOF
+			break
 		Fseek(in_file,负(1))
 		if (onstr=="true")||(onstr=="false")
 			PushValue(TokenList,Token("bool",onstr,line,byte,Array(0)))
@@ -511,7 +521,10 @@ function string ParseExp(Array TokenList)
 				PushValue(Output,Ins(21,0,0))
 			else
 				if op[1]=="@"
-					ParseExp(TransExp(op[4]))
+					set back_type ParseExp(TransExp(op[4]))
+					if back_type!="int"&&back_type!="Object"
+						PushValue(ErrorList,Position(op[2],op[3])+" 错误：下标必须为整数")
+						return ""
 					PushValue(Output,Ins(20,0,0))
 					if op2[0]=="string"
 						PushValue(stk,Token("string","",op2[2],op2[3],Array(0)))
@@ -743,6 +756,9 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 						PushValue(ErrorList,Position(l,b)+" 错误：表达式类型不能为'"+type+"'")
 						return max
 				set i GrammarCheck(i,TokenList,innerFX,tab,true,last_l-m,ms)
+				if (Len(Output)-1)==last_l
+					PushValue(ErrorList,Position(l,b)+" 错误：循环体不能为空")
+					return max
 				PushValue(Output,Ins(61,last_l-m,0))
 				SetArray(Output[last_l],1,Len(Output)-1)
 				when Len(break_list)
@@ -770,6 +786,9 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 						return max
 				set is_if true
 				set i GrammarCheck(i,TokenList,innerFX,tab,innerloop,jumpto,ms)
+				if (Len(Output)-1)==last_l
+					PushValue(ErrorList,Position(l,b)+" 错误：条件体不能为空")
+					return max
 				SetArray(Output[last_l],1,Len(Output)-1)
 				continue
 			if on[1]=="else"
@@ -783,6 +802,9 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 					return max
 				Inc(i)
 				set i GrammarCheck(i,TokenList,innerFX,tab,innerloop,jumpto,ms)
+				if (Len(Output)-1)==last_l
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：条件体不能为空")
+					return max
 				SetArray(Output[last_l],1,Len(Output)-1)
 				continue
 			if on[1]=="return"
@@ -877,10 +899,13 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 				set on on[1]
 				if Len(on)
 					set v_type ParseExp(TransExp(on))
-					if (v_type!="Object")&&(type!="Object")
-						if v_type!=type
-							PushValue(ErrorList,Position(l,b)+" 错误：赋值类型不匹配 "+type+"/"+v_type)
-							return max
+					if type=="auto"
+						set type v_type
+					else
+						if (v_type!="Object")&&(type!="Object")
+							if v_type!=type
+								PushValue(ErrorList,Position(l,b)+" 错误：赋值类型不匹配 "+type+"/"+v_type)
+								return max
 					if tab
 						PushValue(Output,Ins(28,Len(Domains[1])-ms,0))
 						Map_Add(Domains,ons,Var(type,Len(Domains[1])-ms,Array(0),false,false,tab))
@@ -901,6 +926,9 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 			if on[1]=="global"
 				if innerloop
 					PushValue(ErrorList,Position(on[2],on[3])+" 错误：不能在循环体中定义变量")
+					return max
+				if tab
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：全局变量必须在全局域定义")
 					return max
 				Inc(i)
 				set on TokenList[i]
@@ -925,10 +953,13 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 				set on on[1]
 				if Len(on)
 					set v_type ParseExp(TransExp(on))
-					if (v_type!="Object")&&(type!="Object")
-						if v_type!=type
-							PushValue(ErrorList,Position(l,b)+" 错误：赋值类型不匹配 "+type+"/"+v_type)
-							return max
+					if type=="auto"
+						set type v_type
+					else
+						if (v_type!="Object")&&(type!="Object")
+							if v_type!=type
+								PushValue(ErrorList,Position(l,b)+" 错误：赋值类型不匹配 "+type+"/"+v_type)
+								return max
 					PushValue(Output,Ins(29,Len(Domains[1])-31,0))
 					Map_Add(Domains,ons,Var(type,Len(Domains[1])-31,Array(0),false,false,0))
 					continue
@@ -1060,8 +1091,6 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 					Map_Remove(Domains,name_list[Dec(b)-1])
 					PopValue(name_list)
 				continue
-			else
-
 		else
 			if on[0]=="call"
 				set on_a Array(0)
