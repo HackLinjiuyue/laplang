@@ -254,13 +254,9 @@ function Array ParseToken(string path)
 		if Asc(s)==EOF
 			break
 		if (s=="\n")||(s=="\r")||Asc(s)==13
-			if is_break
-				set is_break false
-			else
-				set is_break true
-				Inc(line)
-				set byte 0
-				PushValue(TokenList,Token("break","\n",line,byte,Array(0)))
+			Inc(line)
+			set byte 0
+			PushValue(TokenList,Token("break","\n",line,byte,Array(0)))
 			continue
 		Inc(byte)
 		if s==" "
@@ -604,6 +600,7 @@ function string ParseExp(Array TokenList)
 								if (arg_count>1)&&(op[1]=="PushValue")
 									Inc(arg_count)
 									Inc(t_s)
+									set on_exp Array(0)
 									continue
 								if (back_type!="Object")&&(var[2][arg_count]!="Object")
 									if back_type!=var[2][arg_count]
@@ -658,6 +655,7 @@ function string ParseExp(Array TokenList)
 		PushValue(stk,op)
 		Inc(point)
 	if Len(stk)>1
+		Println(stk)
 		PushValue(ErrorList,Position(op[2],op[3])+" 错误：表达式缺少运算符")
 		return ""
 	return stk[0][0]

@@ -1,0 +1,16 @@
+function void UpSort(Array nums)
+	local int i 0
+	local int max Len(nums)
+	local int k 0
+	local int j 0
+	local int kmax max-1
+	when i<max
+		set k 0
+		when k<kmax
+			if nums[k]<nums[k+1]
+				set j nums[k]
+				SetArray(nums,k,nums[k+1])
+				SetArray(nums,k+1,j)
+			Inc(k)
+		Inc(i)
+	return
