@@ -341,8 +341,6 @@ function Array ParseToken(string path)
 				break
 			set onstr onstr+s
 			Inc(byte)
-		if Asc(s)==EOF
-			break
 		Fseek(in_file,负(1))
 		if (onstr=="true")||(onstr=="false")
 			PushValue(TokenList,Token("bool",onstr,line,byte,Array(0)))
@@ -354,6 +352,8 @@ function Array ParseToken(string path)
 					PushValue(TokenList,Token("int","-1",line,byte,Array(0)))
 				else
 					PushValue(TokenList,Token("var",onstr,line,byte,Array(0)))
+		if Asc(s)==EOF
+			break
 	Fclose(in_file)
 	return TokenList
 
@@ -736,6 +736,20 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 				Inc(i)
 				PushValue(Output,Ins(61,jumpto,0))
 				continue
+			if on[1]=="loop"
+				Inc(i)
+				set last_l Len(Output)
+				set i GrammarCheck(i,TokenList,innerFX,tab,true,last_l,ms)
+				if (Len(Output)-1)==last_l
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：循环体不能为空")
+					return max
+				PushValue(Output,Ins(61,last_l-1,0))
+				when Len(break_list)
+					if tab>=break_list[Len(break_list)-1][0]
+						break
+					SetArray(Output[break_list[Len(break_list)-1][1]],1,Len(Output)-1)
+					PopValue(break_list)
+				continue
 			if (on[1]=="when")||(on[1]=="while")
 				Inc(i)
 				set l on[2]
@@ -1099,9 +1113,10 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 				if type!="void"
 					PushValue(Output,Ins(3,0,0))
 				Inc(i)
-				Inc(i)
 				continue
 			else
+				if on[0]=="break"
+					continue
 				PushValue(ErrorList,Position(on[2],on[3])+" 错误：表达式不允许在此出现")
 				return max
 	when Len(name_list)
@@ -1145,6 +1160,9 @@ function int Compile(string path)
 				Println(ErrorList[Len(ErrorList)-1])
 				PopValue(ErrorList)
 			return 1
+		when Len(break_list)
+			SetArray(Output[break_list[Len(break_list)-1][1]],1,Len(Output)-1)
+			PopValue(break_list)
 	return 0
 
 if Len(Argv())==1
@@ -1154,7 +1172,6 @@ else
 		PrintHelp()
 	else
 		Import("./builtin")
-		Print("")
 		if !Compile(Argv()[1])
 			if Len(Argv())==2
 				set out_name "a.lapb"

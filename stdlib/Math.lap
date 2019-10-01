@@ -1,4 +1,4 @@
-global DLLHandle Lib_Math DLLOpen("stdlib/Math.dll")
+global DLLHandle Lib_Math DLLOpen("stdlib/Math.so")
 global NativeFunction floor DLLGetFunction(Lib_Math,"Floor")
 global NativeFunction pow DLLGetFunction(Lib_Math,"Pow")
 global NativeFunction sin DLLGetFunction(Lib_Math,"Sin")
