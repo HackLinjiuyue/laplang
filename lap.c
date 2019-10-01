@@ -779,24 +779,6 @@ void CloseFile(){
 	env->Stack[env->Index]=NULL;
 }
 
-void PushObj(){
-    ExtendStack(env);
-    env->Stack[env->Index++]=CreateObject(4,env->Commands[env->PC][1],NULL,NULL);
-}
-
-void SetProperty(){//引用设置
-	int* ins=env->Commands[env->PC];
-	LapObject *op2=env->Stack[--env->Index];
-	int i=ins[1];
-	LapObject *op1=env->Stack[--env->Index];
-	if(op1->Property[i]!=NULL){
-		FreeObject(op1->Property[i]);
-	}
-	op1->Property[i]=CreateObjectFromObject(op2);
-	FreeObject(op2);
-	env->Stack[env->Index]=NULL;
-}
-
 void SetIndex(){//引用设置
 	LapObject *op3=env->Stack[--env->Index];
 	LapObject *op2=env->Stack[--env->Index];
@@ -1114,7 +1096,7 @@ Pop,Add,Sub,Mul,Div,Mod,MoveLeft,MoveRight,BitXor,BitAnd,BitOr,
 Or,And,Bigger,Smaller,PushFile,Equal,Index,Not,Inc,Dec,IsNull,
 Ops,Print,GetCommandArg,StoreVarLocal,StoreVarGlobal,SetVarLocal,
 SetVarGlobal,True_Jump,False_Jump,Goto,Return,Asc,Len,Fgetc,Fwrite,
-CloseFile,PushObj,SetProperty,SetIndex,ArrayPush,ArrayPop,
+CloseFile,NULL,NULL,SetIndex,ArrayPush,ArrayPop,
 ArrayFill,ArrayInsert,ArrayRemove,Dlopen,Dlsym,CallNative,Dlclose,
 PushEmptyStr,PushArray,Delete,Exec,Int,Float,Type,Input,Jump,PushNULL,Fseek,SetString,
 PushFunction
