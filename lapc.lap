@@ -602,6 +602,9 @@ function string ParseExp(Array TokenList)
 									Inc(t_s)
 									set on_exp Array(0)
 									continue
+								if arg_count==Len(var[2])
+									PushValue(ErrorList,Position(op[2],op[3])+" 错误：函数所定义的参数个数是"+ItoS(Len(var[2]))+"个，但给了"+ItoS(arg_count+1)+"个")
+									return ""
 								if (back_type!="Object")&&(var[2][arg_count]!="Object")
 									if back_type!=var[2][arg_count]
 										PushValue(ErrorList,Position(op2[2],op2[3])+" 错误：函数参数"+ItoS(arg_count+1)+"所定义的类型'"+var[2][arg_count]+"'与所给表达式类型'"+back_type+"'不匹配")

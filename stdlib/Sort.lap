@@ -2,11 +2,17 @@ function void UpSort(Array nums)
 	local int i 0
 	local int max Len(nums)
 	local int k 0
-	local int j 0
-	local int kmax max-1
+	local Object j 0
+	local int kmax 0
 	when i<max
 		set k 0
+		set kmax Len(nums)-1-i
 		when k<kmax
+			if Type(nums[k])&&!Type(nums[k+1])
+				SetArray(nums,k+1,Float(nums[k+1]))
+			else
+				if !Type(nums[k])&&Type(nums[k+1])
+					SetArray(nums,k+1,Int(nums[k+1]))
 			if nums[k]<nums[k+1]
 				set j nums[k]
 				SetArray(nums,k,nums[k+1])
