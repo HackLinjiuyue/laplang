@@ -1,7 +1,9 @@
 #ifdef __MINGW32__
 	#include<windows.h>
+	#define PLATFORM "windows"
 #else
 	#include<dlfcn.h>
+	#define PLATFORM "linux"
 #endif
 
 #include "CLap.h"
@@ -9,6 +11,8 @@
 //#include<time.h>
 
 int r_size=0;
+char* pf=NULL;
+LapObject *platform=NULL;
 
 typedef struct{
 	LapObject*** VarStacks;
@@ -1017,30 +1021,6 @@ void Type(){
 	FreeObject(op1);
 }
 
-/*
-void Input(){
-	ExtendStack(env);
-	char onget=getch();
-	char *onstr=calloc(8,sizeof(char));
-	int onsize=0;
-	int max=8;
-	while(onget!='\n'&&onget!='\r'){
-		if(onsize==max-1){
-			max+=8;
-			onstr=realloc(onstr,sizeof(char[max]));
-			memset(onstr+max-8,0,8);
-		}
-		if(onget==8&&!onsize){
-			onstr[--onsize]=0;
-		}
-		else{
-			onstr[onsize++]=onget;
-		}
-		onget=getch();
-	}
-	env->Stack[env->Index++]=CreateObject(2,onsize,onstr);
-}*/
-
 void Input(){
 	ExtendStack(env);
 	char *onstr=calloc(300,sizeof(char));
@@ -1091,12 +1071,21 @@ void PushFunction(){//需要一个起始位置
 	env->Stack[env->Index++]=CreateObject(8,0,value,NULL);
 }
 
+void Fread(){//
+
+}
+
+void GetPlatform(){
+	ExtendStack(env);
+	env->Stack[env->Index++]=CreateObjectFromObject(platform);
+}
+
 void(*Ins[66])()={PushConst,PushVarLocal,PushVarGlobal,
 Pop,Add,Sub,Mul,Div,Mod,MoveLeft,MoveRight,BitXor,BitAnd,BitOr,
 Or,And,Bigger,Smaller,PushFile,Equal,Index,Not,Inc,Dec,IsNull,
 Ops,Print,GetCommandArg,StoreVarLocal,StoreVarGlobal,SetVarLocal,
 SetVarGlobal,True_Jump,False_Jump,Goto,Return,Asc,Len,Fgetc,Fwrite,
-CloseFile,NULL,NULL,SetIndex,ArrayPush,ArrayPop,
+CloseFile,Fread,GetPlatform,SetIndex,ArrayPush,ArrayPop,
 ArrayFill,ArrayInsert,ArrayRemove,Dlopen,Dlsym,CallNative,Dlclose,
 PushEmptyStr,PushArray,Delete,Exec,Int,Float,Type,Input,Jump,PushNULL,Fseek,SetString,
 PushFunction
@@ -1128,6 +1117,10 @@ int main(int argc,char* argv[]){
 		return 1;
 	}
 	args=CreateObject(4,argc-1,NULL,NULL);
+	size_t s=strlen(PLATFORM);
+	pf=malloc(sizeof(char[s]));
+	strcpy(pf,PLATFORM);
+	platform=CreateObject(2,s,pf,NULL);
 	int i=1;
 	for(;i<argc;++i){
 		args->Property[i-1]=CreateObject(2,StrLen(argv[i]),argv[i],NULL);
@@ -1183,4 +1176,6 @@ int main(int argc,char* argv[]){
 	printf("%f\n",duration);*/
 	//DeleteState(env,1);
 	free(args);
+	free(pf);
+	free(platform);
 }

@@ -1,4 +1,9 @@
-global DLLHandle Lib_Math DLLOpen("stdlib/Math.so")
+local string path ""
+if GetPlatform()=="linux"
+	set path "so"
+else
+	set path "dll"
+global DLLHandle Lib_Math DLLOpen("stdlib/Math."+path)
 global NativeFunction floor DLLGetFunction(Lib_Math,"Floor")
 global NativeFunction pow DLLGetFunction(Lib_Math,"Pow")
 global NativeFunction sin DLLGetFunction(Lib_Math,"Sin")

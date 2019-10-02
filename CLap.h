@@ -13,7 +13,7 @@ enum LapType{
 	Lobject,
 	Lfile,
 	Lhandle,
-	Lnative
+	Lnative//7
 };
 
 typedef struct LapObject{
@@ -155,6 +155,8 @@ void PrintData(LapObject *obj){
 		case Lnative:
 		printf("Lap NativeFunction");
 		break;
+		default:
+		printf("Lap ExtendedObject");
 		}
 	}
 }

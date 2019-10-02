@@ -119,7 +119,7 @@ Map_Add(Map_KeyWord,"set",true)
 Map_Add(Map_KeyWord,"call",true)
 Map_Add(Map_KeyWord,"delete",true)
 Map_Add(Map_KeyWord,"#path",true)
-Map_Add(Map_KeyWord,"loop",true)
+Map_Add(Map_KeyWord,"#define",true)
 Map_Add(Map_KeyWord,"while",true)
 
 local Array Map_Type Map()
@@ -166,6 +166,7 @@ Map_Add(Map_Builtin,"DLLOpen",49)
 Map_Add(Map_Builtin,"DLLClose",52)
 Map_Add(Map_Builtin,"DLLGetFunction",50)
 Map_Add(Map_Builtin,"SetArray",43)
+Map_Add(Map_Builtin,"GetPlatform",42)
 Map_Add(Map_Builtin,"Fseek",63)
 
 local Array Map_OP_Ins Map()
@@ -184,6 +185,13 @@ Map_Add(Map_OP_Ins,"&&",15)
 Map_Add(Map_OP_Ins,">",16)
 Map_Add(Map_OP_Ins,"<",17)
 Map_Add(Map_OP_Ins,"==",19)
+
+local Array Map_Macro Map()
+Map_Add(Map_Macro,"EOF",Token("int","-1",0,0,Array(0)))
+Map_Add(Map_Macro,"pi",Token("float","3.141592",0,0,Array(0)))
+Map_Add(Map_Macro,"true",Token("bool","true",0,0,Array(0)))
+Map_Add(Map_Macro,"false",Token("bool","-1",0,0,Array(0)))
+Map_Add(Map_Macro,"null",Token("Object","null",0,0,Array(0)))
 
 local Array Domains Map()
 local Array Consts Map()
@@ -249,6 +257,7 @@ function Array ParseToken(string path)
 	local int line 1
 	local int byte 0
 	local bool is_break false
+	local Object on null
 	when true
 		set s Fgetc(in_file)
 		if Asc(s)==EOF
@@ -338,16 +347,13 @@ function Array ParseToken(string path)
 			set onstr onstr+s
 			Inc(byte)
 		Fseek(in_file,负(1))
-		if (onstr=="true")||(onstr=="false")
-			PushValue(TokenList,Token("bool",onstr,line,byte,Array(0)))
+		set on Map_Get(Map_Macro,onstr)
+		if IsNull(on)
+			PushValue(TokenList,Token("var",onstr,line,byte,Array(0)))
 		else
-			if onstr=="null"
-				PushValue(TokenList,Token("Object",onstr,line,byte,Array(0)))
-			else
-				if onstr=="EOF"
-					PushValue(TokenList,Token("int","-1",line,byte,Array(0)))
-				else
-					PushValue(TokenList,Token("var",onstr,line,byte,Array(0)))
+			SetArray(on,2,line)
+			SetArray(on,3,byte)
+			PushValue(TokenList,on)
 		if Asc(s)==EOF
 			break
 	Fclose(in_file)
@@ -554,19 +560,23 @@ function string ParseExp(Array TokenList)
 			continue
 		else
 			if op[0]=="var"
-				set var Map_Get(Domains,op[1])
+				set var Map_Get(Map_Macro,op[1])
 				if IsNull(var)
-					PushValue(ErrorList,Position(op[2],op[3])+" 错误：变量'"+op[1]+"'未在此作用域中定义")
-					return ""
-				SetArray(op,0,var[0])
-				set is_inter var[5]
-				if is_inter
-					PushValue(Output,Ins(1,var[1],0))
+					set var Map_Get(Domains,op[1])
+					if IsNull(var)
+						PushValue(ErrorList,Position(op[2],op[3])+" 错误：变量'"+op[1]+"'未在此作用域中定义")
+						return ""
+					SetArray(op,0,var[0])
+					set is_inter var[5]
+					if is_inter
+						PushValue(Output,Ins(1,var[1],0))
+					else
+						PushValue(Output,Ins(2,var[1],0))
+					set is_inter false
+					PushValue(stk,op)
+					Inc(point)
 				else
-					PushValue(Output,Ins(2,var[1],0))
-				set is_inter false
-				PushValue(stk,op)
-				Inc(point)
+					SetArray(TokenList,point,var)
 				continue
 			else
 				if op[0]=="call"
@@ -719,6 +729,28 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 				set c_path on[1]
 				Inc(i)
 				continue
+			if on[1]=="#define"
+				Inc(i)
+				set on TokenList[i]
+				if on[0]!="var"
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：常量定义语法错误")
+					return max
+				set lin_arr Map_Get(Map_Macro,on[1])
+				if !IsNull(lin_arr)
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：常量'"+on[1]+"'已定义")
+					return max
+				Inc(i)
+				set ons on[1]
+				set lin_arr GetExp(TokenList,i)
+				if !Len(lin_arr[1])
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：常量表达式只允许一个单位")
+					return max
+				if Len(lin_arr[1])>1
+					PushValue(ErrorList,Position(on[2],on[3])+" 错误：常量表达式只允许一个单位")
+					return max
+				Map_Add(Map_Macro,ons,TokenList[i])
+				set i lin_arr[0]
+				continue
 			if on[1]=="import"
 				Inc(i)
 				set on TokenList[i]
@@ -736,20 +768,6 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 					return max
 				Inc(i)
 				PushValue(Output,Ins(61,jumpto,0))
-				continue
-			if on[1]=="loop"
-				Inc(i)
-				set last_l Len(Output)
-				set i GrammarCheck(i,TokenList,innerFX,tab,true,last_l,ms)
-				if (Len(Output)-1)==last_l
-					PushValue(ErrorList,Position(on[2],on[3])+" 错误：循环体不能为空")
-					return max
-				PushValue(Output,Ins(61,last_l-1,0))
-				when Len(break_list)
-					if tab>=break_list[Len(break_list)-1][0]
-						break
-					SetArray(Output[break_list[Len(break_list)-1][1]],1,Len(Output)-1)
-					PopValue(break_list)
 				continue
 			if (on[1]=="when")||(on[1]=="while")
 				Inc(i)
@@ -925,8 +943,8 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 						PushValue(Output,Ins(28,Len(Domains[1])-ms,0))
 						Map_Add(Domains,ons,Var(type,Len(Domains[1])-ms,Array(0),false,false,tab))
 					else
-						PushValue(Output,Ins(28,Len(Domains[1])-31,0))
-						Map_Add(Domains,ons,Var(type,Len(Domains[1])-31,Array(0),false,false,tab))
+						PushValue(Output,Ins(28,Len(Domains[1])-32,0))
+						Map_Add(Domains,ons,Var(type,Len(Domains[1])-32,Array(0),false,false,tab))
 					PushValue(name_list,ons)
 					continue
 				else
@@ -935,8 +953,8 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 						PushValue(Output,Ins(28,Len(Domains[1])-ms,0))
 						Map_Add(Domains,ons,Var(type,Len(Domains[1])-ms,Array(0),false,false,tab))
 					else
-						PushValue(Output,Ins(28,Len(Domains[1])-31,0))
-						Map_Add(Domains,ons,Var(type,Len(Domains[1])-31,Array(0),false,false,tab))
+						PushValue(Output,Ins(28,Len(Domains[1])-32,0))
+						Map_Add(Domains,ons,Var(type,Len(Domains[1])-32,Array(0),false,false,tab))
 					continue
 			if on[1]=="global"
 				if innerloop
@@ -975,13 +993,13 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 							if v_type!=type
 								PushValue(ErrorList,Position(l,b)+" 错误：赋值类型不匹配 "+type+"/"+v_type)
 								return max
-					PushValue(Output,Ins(29,Len(Domains[1])-31,0))
-					Map_Add(Domains,ons,Var(type,Len(Domains[1])-31,Array(0),false,false,0))
+					PushValue(Output,Ins(29,Len(Domains[1])-32,0))
+					Map_Add(Domains,ons,Var(type,Len(Domains[1])-32,Array(0),false,false,0))
 					continue
 				else
 					PushValue(Output,Ins(62,0,0))
-					PushValue(Output,Ins(29,Len(Domains[1])-31,0))
-					Map_Add(Domains,ons,Var(type,Len(Domains[1])-31,Array(0),false,false,0))
+					PushValue(Output,Ins(29,Len(Domains[1])-32,0))
+					Map_Add(Domains,ons,Var(type,Len(Domains[1])-32,Array(0),false,false,0))
 					continue
 			if on[1]=="interface"
 				if tab
@@ -1091,8 +1109,8 @@ function int GrammarCheck(int start,Array TokenList,bool innerFX,int tab_num,boo
 					Inc(l)
 				set on_a Map_Get(Domains,ons)
 				if IsNull(on_a)
-					Map_Add(Domains,ons,Var(type,Len(Domains[1])-31-Len(lin_arr[1]),func_temp,true,false,0))
-					PushValue(Output,Ins(65,Len(Output)+2,0),Ins(29,Len(Domains[1])-32-Len(lin_arr[1]),0))
+					Map_Add(Domains,ons,Var(type,Len(Domains[1])-32-Len(lin_arr[1]),func_temp,true,false,0))
+					PushValue(Output,Ins(65,Len(Output)+2,0),Ins(29,Len(Domains[1])-33-Len(lin_arr[1]),0))
 				else
 					SetArray(on_a,2,func_temp)
 					PushValue(Output,Ins(65,Len(Output)+2,0),Ins(31,on_a[1],0))

@@ -1,3 +1,8 @@
-local DLLHandle Lib_System DLLOpen("stdlib/System.dll")
-local NativeFunction system DLLGetFunction(Lib_System,"System")
+local string path ""
+if GetPlatform()=="linux"
+	set path "so"
+else
+	set path "dll"
+global DLLHandle Lib_System DLLOpen("stdlib/System."+path)
+global NativeFunction system DLLGetFunction(Lib_System,"System")
 interface int system(string arg)
